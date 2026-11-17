@@ -1,3 +1,60 @@
-# Kommt in Phase 2: API, Indexer, ChromaDB, Nachtjob und Dashboard als Container auf dem Mini-PC.
-# Ollama läuft nicht hier, sondern auf dem Gaming-PC (OLLAMA_URL in .env).
-services: {}
+# Dienste auf dem Mini-PC. Ollama läuft nicht hier, sondern auf dem Gaming-PC
+# (OLLAMA_URL in .env). Start: `cp .env.example .env`, anpassen, `docker compose up -d --build`.
+#
+#   chroma   Vektor-DB, nur im internen Netz erreichbar
+#   indexer  indexiert beim Start komplett, danach nur geänderte Notizen (watchdog)
+#   api      FastAPI auf Port 8080: /ask, /search, /status, /reindex, Doku unter /docs
+
+x-assistant: &assistant
+  build: .
+  image: obsidian-assistant:latest
+  env_file:
+    - path: .env
+      required: false  # ohne .env laufen Standardwerte, z. B. für einen Testlauf
+  environment: &env
+    VAULT_PATH: /vault
+    CHROMA_HOST: chroma
+    CHROMA_PORT: "8000"
+    EMBED_CACHE_PATH: /cache/embeddings.sqlite3
+  volumes:
+    - ${VAULT_HOST_PATH:-./demo_vault}:/vault:ro
+    - cache:/cache
+  depends_on:
+    chroma:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  chroma:
+    image: chromadb/chroma:1.5.9
+    volumes:
+      - chroma:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/8000' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  indexer:
+    <<: *assistant
+    command: ["assistant", "watch"]
+
+  api:
+    <<: *assistant
+    command: ["assistant", "serve", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "${API_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/docs', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  chroma:
+  cache:
