@@ -1,0 +1,98 @@
+# Eval-Set für den Demo-Vault.
+# Pfade in "erwartet" sind relativ zu demo_vault/.
+# typ: exakt = exakter Begriff aus der Notiz, umschreibung = mit anderen Worten,
+#      mehrere = Antwort braucht mehrere Notizen (erwartet ist dann eine Liste).
+# Treffer@k zählt, wenn eine (bei "mehrere": jede) erwartete Notiz unter den ersten k Treffern ist.
+
+# --- Exakte Begriffe ---
+- frage: "Welchen Port nutzt Ollama?"
+  erwartet: "03 Wissen/Homelab/Ollama.md"
+  typ: exakt
+
+- frage: "Was bedeutet restart: unless-stopped?"
+  erwartet: "03 Wissen/Docker/Compose.md"
+  typ: exakt
+
+- frage: "Mit welchen restic-Einstellungen werden alte Snapshots gelöscht?"
+  erwartet: "03 Wissen/Docker/Volumes und Backups.md"
+  typ: exakt
+
+- frage: "Was ist ITBS?"
+  erwartet: "03 Wissen/Laufen/Läuferknie.md"
+  typ: exakt
+
+- frage: "Wie hilft ein Schneckenkragen?"
+  erwartet: "03 Wissen/Garten/Schnecken abwehren.md"
+  typ: exakt
+
+- frage: "Was ist ein Exit Node bei Tailscale?"
+  erwartet: "03 Wissen/Homelab/Tailscale.md"
+  typ: exakt
+
+- frage: "Wann sind die Eisheiligen?"
+  erwartet: "03 Wissen/Garten/Aussaatkalender.md"
+  typ: exakt
+
+# --- Umschreibungen ---
+- frage: "Wie starte ich meine Container?"
+  erwartet: "03 Wissen/Docker/Compose.md"
+  typ: umschreibung
+
+- frage: "Wie schalte ich den Gaming-PC übers Netzwerk ein?"
+  erwartet: "03 Wissen/Homelab/Wake-on-LAN.md"
+  typ: umschreibung
+
+- frage: "Welche Seitentriebe muss ich bei Tomaten entfernen?"
+  erwartet: "03 Wissen/Garten/Tomaten.md"
+  typ: umschreibung
+
+- frage: "Warum stinkt mein Komposthaufen?"
+  erwartet: "03 Wissen/Garten/Kompost.md"
+  typ: umschreibung
+
+- frage: "Wie viele Kilometer halten meine Laufschuhe?"
+  erwartet: "03 Wissen/Laufen/Laufschuhe.md"
+  typ: umschreibung
+
+- frage: "In welchem Pulsbereich laufe ich locker?"
+  erwartet: "03 Wissen/Laufen/Pulszonen.md"
+  typ: umschreibung
+
+- frage: "Welche Werbeblocker-Lösung läuft im Heimnetz?"
+  erwartet: "03 Wissen/Homelab/Pi-hole.md"
+  typ: umschreibung
+
+- frage: "Was wird in die unterste Lage des Gemüsebeets gefüllt?"
+  erwartet: "03 Wissen/Garten/Hochbeet anlegen.md"
+  typ: umschreibung
+
+# --- Mehrere Notizen ---
+- frage: "Welche IP hat der Rechner, auf dem die Sprachmodelle laufen, und auf welchem Port sind sie erreichbar?"
+  erwartet:
+    - "03 Wissen/Homelab/Netzwerkplan.md"
+    - "03 Wissen/Homelab/Ollama.md"
+  typ: mehrere
+
+- frage: "Wie war meine Zielzeit beim Halbmarathon geplant, und habe ich sie geschafft?"
+  erwartet:
+    - "03 Wissen/Laufen/Trainingsplan Halbmarathon.md"
+    - "03 Wissen/Laufen/Stadtlauf 2026.md"
+  typ: mehrere
+
+- frage: "Was pflanze ich neben Tomaten, und wann dürfen sie ins Freie?"
+  erwartet:
+    - "03 Wissen/Garten/Mischkultur.md"
+    - "03 Wissen/Garten/Aussaatkalender.md"
+  typ: mehrere
+
+- frage: "Wie verhindere ich, dass Schnecken angelockt werden, wenn ich gieße?"
+  erwartet:
+    - "03 Wissen/Garten/Bewässerung.md"
+    - "03 Wissen/Garten/Schnecken abwehren.md"
+  typ: mehrere
+
+- frage: "Warum hatte ich Knieprobleme, und wie oft mache ich deshalb heute noch harte Einheiten?"
+  erwartet:
+    - "03 Wissen/Laufen/Läuferknie.md"
+    - "03 Wissen/Laufen/Intervalltraining.md"
+  typ: mehrere

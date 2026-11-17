@@ -1,0 +1,3 @@
+# Kommt in Phase 2: API, Indexer, ChromaDB, Nachtjob und Dashboard als Container auf dem Mini-PC.
+# Ollama läuft nicht hier, sondern auf dem Gaming-PC (OLLAMA_URL in .env).
+services: {}

@@ -1,0 +1,43 @@
+# Konfiguration und Geheimnisse
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Daten und Index
+.chroma/
+chroma_data/
+data/
+*.sqlite3
+eval/results/
+
+# Echte Vaults gehören nie ins Repo
+vault/
+Brain/
+
+# Obsidian-Arbeitsdateien im Demo-Vault
+demo_vault/.obsidian/workspace*.json
+demo_vault/.trash/
+
+# Node (Obsidian-Plugin)
+node_modules/
+obsidian-plugin/main.js
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
