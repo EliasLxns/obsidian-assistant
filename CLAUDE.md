@@ -81,6 +81,16 @@ assistant ask "Welchen Port nutzt Ollama?"
 assistant eval                   # Treffer@1 / Treffer@5 als Tabelle
 ```
 
+## Claude-Code-Hooks
+
+`.claude/settings.json` startet drei Hooks aus `.claude/hooks/` (Tests in `tests/test_claude_hooks.py`):
+
+- **`check_python.py`** (nach jedem Edit/Write einer `.py`-Datei): `ruff check --fix`, `ruff format`, dann `ruff check` und `pyright`. Restfehler gehen sofort an Claude zurück
+- **`run_tests.py`** (wenn Claude fertig sein will): `pytest -x -q`, sobald Python-Dateien geändert sind. Rote Tests blockieren einmal, danach nur noch eine Warnung
+- **`capture_rules.py`** (bei jeder Nachricht): erkennt Sätze wie „ab jetzt“, „immer“, „nie“, „merk dir“ und lässt Claude die Regel unten unter „Regeln“ eintragen
+
+Fehlt `ruff`, `pyright` oder `pytest`, überspringen die Hooks still. Deshalb zuerst `pip install -e ".[dev]"`.
+
 ## Regeln
 
 - Konfiguration nur über `.env` (Ollama-URL, Vault-Pfad, Modellnamen); `.env` steht in `.gitignore`, Vorlage ist `.env.example`
