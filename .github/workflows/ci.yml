@@ -50,3 +50,4 @@ jobs:
           docker run --rm obsidian-assistant:ci assistant --help
           docker run --rm obsidian-assistant:ci assistant nightly --help
           docker run --rm obsidian-assistant:ci git --version
+          docker run --rm obsidian-assistant:ci ssh -V

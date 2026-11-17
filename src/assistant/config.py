@@ -35,6 +35,11 @@ class Settings:
     gaming_pc_mac: str = ""  # leer: kein Wake-on-LAN
     wol_broadcast: str = "255.255.255.255"
     wol_wait_s: float = 180.0
+    # Ausschalten per SSH nach getaner Arbeit (nur wenn der Nachtjob geweckt hat)
+    gaming_pc_ssh: str = ""  # leer: nie ausschalten; sonst z. B. benutzer@host.docker.internal
+    gaming_pc_ssh_key: Path = Path("secrets/gaming_pc_ed25519")
+    shutdown_ruhe_min: float = 15.0
+    shutdown_max_warten_min: float = 120.0
 
 
 def read_env_file(path: Path) -> dict[str, str]:
@@ -85,4 +90,10 @@ def load_settings(
         gaming_pc_mac=get("GAMING_PC_MAC", d.gaming_pc_mac),
         wol_broadcast=get("WOL_BROADCAST", d.wol_broadcast),
         wol_wait_s=float(get("WOL_WAIT_S", str(d.wol_wait_s))),
+        gaming_pc_ssh=get("GAMING_PC_SSH", d.gaming_pc_ssh),
+        gaming_pc_ssh_key=Path(get("GAMING_PC_SSH_KEY", str(d.gaming_pc_ssh_key))),
+        shutdown_ruhe_min=float(get("SHUTDOWN_RUHE_MIN", str(d.shutdown_ruhe_min))),
+        shutdown_max_warten_min=float(
+            get("SHUTDOWN_MAX_WARTEN_MIN", str(d.shutdown_max_warten_min))
+        ),
     )

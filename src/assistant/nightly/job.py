@@ -60,8 +60,11 @@ def run_nightly(
     optionen: Optionen | None = None,
     wol_timeout_s: float = 180.0,
     entladen: Callable[[], None] | None = None,
+    ausschalten: Callable[[], str] | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> Lauf:
+    """Ein Nachtlauf. ``ausschalten`` wartet auf Ruhe und fährt den PC herunter (power.py);
+    es wird nur aufgerufen, wenn dieser Lauf den PC selbst geweckt hat."""
     s = c.settings
     lauf = Lauf(id=jetzt.strftime("%Y-%m-%d_%H%M%S"), start=jetzt.isoformat(timespec="seconds"))
     optionen = optionen or Optionen()
@@ -75,6 +78,9 @@ def run_nightly(
         # nicht erreichbar heißt: den PC in Ruhe lassen.
         if entladen is not None and lauf.ollama_benutzt:
             entladen()
+        if ausschalten is not None and lauf.geweckt:
+            lauf.hinweise.append(ausschalten())
+            protocol.speichern(s.nightly_state_path, lauf)
     return lauf
 
 
@@ -113,6 +119,7 @@ def _ablauf(
             return
     elif pc.erreichbar:
         lauf.pc = f"geweckt nach {pc.wartezeit_s:.0f} s"
+        lauf.geweckt = True
     else:
         lauf.pc = "nicht erreichbar" if waker else "nicht erreichbar, keine MAC konfiguriert"
         lauf.hinweise.append("Abgebrochen: Ollama antwortet nicht. Nächster Versuch morgen.")

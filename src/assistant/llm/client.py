@@ -135,3 +135,23 @@ def unload_models(
         if eigener:
             c.close()
     return fehler
+
+
+def ollama_busy(
+    base_url: str, *, timeout_s: float = 5.0, client: httpx.Client | None = None
+) -> bool:
+    """Hat Ollama gerade ein Modell geladen (``/api/ps``)? Dann läuft oder lief eben eine Anfrage.
+
+    Nicht erreichbar zählt als „nicht beschäftigt“.
+    """
+    url = f"{base_url.rstrip('/')}/api/ps"
+    try:
+        if client is not None:
+            antwort = client.get(url)
+        else:
+            with httpx.Client(timeout=timeout_s) as eigener:
+                antwort = eigener.get(url)
+        daten = cast(dict[str, Any], antwort.json()) if antwort.is_success else {}
+    except (httpx.HTTPError, ValueError):
+        return False
+    return bool(daten.get("models"))

@@ -78,11 +78,13 @@ services:
       CHROMA_PORT: "8000"
       EMBED_CACHE_PATH: /cache/embeddings.sqlite3
       NIGHTLY_STATE_PATH: /state
+      GAMING_PC_SSH_KEY: /secrets/gaming_pc_ed25519
       TZ: ${TZ:-Europe/Berlin}  # Zeitfenster und Startzeit gelten in Ortszeit
     volumes:
       - ${VAULT_HOST_PATH:-./demo_vault}:/vault  # schreibend: nur 00 Inbox und Zielordner
       - cache:/cache
       - nachtjob:/state  # Läufe für Rückgängig, Pause-Schalter
+      - ./secrets:/secrets:ro  # SSH-Schlüssel zum Ausschalten des Gaming-PCs (nie committen)
 
 volumes:
   chroma:

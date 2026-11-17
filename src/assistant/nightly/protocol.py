@@ -42,6 +42,7 @@ class Lauf:
     probelauf: bool = False
     pc: str = ""  # „war wach“, „geweckt nach 42 s“, …
     ollama_benutzt: bool = False  # nur dann werden die Modelle danach entladen
+    geweckt: bool = False  # nur dann darf der Nachtjob den PC danach ausschalten
     git_vorher: str | None = None
     git_nachher: str | None = None
     hinweise: list[str] = field(default_factory=list[str])

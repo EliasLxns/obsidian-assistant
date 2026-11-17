@@ -2,8 +2,9 @@
 FROM python:3.12-slim
 
 # git: Der Nachtjob sichert den Vault vor jedem Lauf mit einem Commit.
+# openssh-client: Er schaltet den Gaming-PC nach getaner Arbeit per SSH aus.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git tzdata \
+    && apt-get install -y --no-install-recommends git openssh-client tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

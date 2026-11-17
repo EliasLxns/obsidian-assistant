@@ -10,14 +10,14 @@ import argparse
 import sys
 import time
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from watchdog.observers.api import BaseObserver
 
 from assistant.components import Components, ComponentsFactory, default_components
-from assistant.config import load_settings
+from assistant.config import Settings, load_settings
 from assistant.evaluation import evaluate, format_details, format_table, load_questions
 from assistant.index.embedder import OllamaError
 from assistant.index.store import InMemoryStore
@@ -26,7 +26,7 @@ from assistant.ingest.indexer import IndexReport, index_notes, index_vault
 from assistant.ingest.watcher import ChangeBatcher, watch_vault
 from assistant.links import obsidian_url
 from assistant.llm.answer import answer_question
-from assistant.llm.client import ollama_reachable, unload_models
+from assistant.llm.client import ollama_busy, ollama_reachable, unload_models
 from assistant.nightly import protocol
 from assistant.nightly.guard import (
     im_fenster,
@@ -38,6 +38,14 @@ from assistant.nightly.guard import (
     warum_nicht,
 )
 from assistant.nightly.job import Optionen, run_nightly
+from assistant.nightly.power import (
+    PCFehler,
+    Regeln,
+    SshPC,
+    ausschalten_wenn_ruhig,
+    bewerten,
+    messen,
+)
 from assistant.nightly.protocol import alle_laeufe
 from assistant.nightly.wol import WakeOnLan
 from assistant.retrieval.search import Retriever
@@ -102,6 +110,12 @@ def build_parser() -> argparse.ArgumentParser:
     n_pause.add_argument("--grund", default="", help="z. B. „LAN-Party“")
     n_sub.add_parser("weiter", help="Pause aufheben")
     n_sub.add_parser("laeufe", help="Letzte Läufe anzeigen")
+    n_aus = n_sub.add_parser(
+        "ausschalten", help="Gaming-PC per SSH ausschalten, sobald er lange genug ruhig ist"
+    )
+    n_aus.add_argument(
+        "--pruefen", action="store_true", help="Nur messen und anzeigen, nicht ausschalten"
+    )
     n_undo = n_sub.add_parser("rueckgaengig", help="Einen Lauf rückgängig machen")
     n_undo.add_argument("lauf", nargs="?", help="ID des Laufs (Standard: der letzte)")
     return parser
@@ -239,6 +253,7 @@ def _nachtlauf(c: Components, vault: Path, args: argparse.Namespace) -> int:
         ),
         wol_timeout_s=s.wol_wait_s,
         entladen=lambda: _entladen(s.ollama_url, [s.chat_model, s.embed_model]),
+        ausschalten=_ausschalter(s),
     )
     print(f"Lauf {lauf.id}{' (Probelauf)' if lauf.probelauf else ''}: PC {lauf.pc}", flush=True)
     for h in lauf.hinweise:
@@ -247,6 +262,46 @@ def _nachtlauf(c: Components, vault: Path, args: argparse.Namespace) -> int:
         wohin = f" → {a.ziel}" if a.ziel and a.ziel != a.quelle else ""
         print(f"  [{a.art}] {a.quelle}{wohin} ({a.details})")
     return 1 if any(h.startswith("Abgebrochen") for h in lauf.hinweise) else 0
+
+
+def _gaming_pc(s: Settings) -> SshPC | None:
+    if not s.gaming_pc_ssh:
+        return None
+    return SshPC(s.gaming_pc_ssh, s.gaming_pc_ssh_key, s.nightly_state_path / "known_hosts")
+
+
+def _regeln(s: Settings) -> Regeln:
+    return Regeln(ruhe_min=s.shutdown_ruhe_min, max_warten_min=s.shutdown_max_warten_min)
+
+
+def _ausschalter(s: Settings) -> Callable[[], str] | None:
+    """Ohne ``GAMING_PC_SSH`` wird nie ausgeschaltet."""
+    pc = _gaming_pc(s)
+    if pc is None:
+        return None
+    return lambda: ausschalten_wenn_ruhig(pc, lambda: ollama_busy(s.ollama_url), _regeln(s))
+
+
+def _cmd_ausschalten(s: Settings, pruefen: bool) -> int:
+    pc = _gaming_pc(s)
+    if pc is None:
+        print("GAMING_PC_SSH ist nicht gesetzt, Ausschalten ist aus.", file=sys.stderr)
+        return 1
+    if pruefen:
+        try:
+            m = messen(pc, lambda: ollama_busy(s.ollama_url))
+        except PCFehler as e:
+            print(f"Fehler: {e}", file=sys.stderr)
+            return 2
+        leerlauf = "niemand angemeldet" if m.leerlauf_s is None else f"{m.leerlauf_s / 60:.0f} min"
+        gpu = "unbekannt" if m.gpu is None else f"{m.gpu:.0f} %"
+        print(f"Ollama beschäftigt: {'ja' if m.ollama_aktiv else 'nein'}")
+        print(f"Keine Eingabe seit: {leerlauf}")
+        print(f"GPU: {gpu}")
+        print(f"Bewertung: {bewerten(m, _regeln(s))[1]}")
+        return 0
+    print(ausschalten_wenn_ruhig(pc, lambda: ollama_busy(s.ollama_url), _regeln(s)), flush=True)
+    return 0
 
 
 def _entladen(url: str, modelle: list[str]) -> None:
@@ -298,6 +353,8 @@ def _cmd_nightly(args: argparse.Namespace, c: Components) -> int:
             return 0
         case "rueckgaengig":
             return _rueckgaengig(vault, state, args.lauf)
+        case "ausschalten":
+            return _cmd_ausschalten(s, args.pruefen)
         case _:
             return _nachtlauf(c, vault, args)
 
