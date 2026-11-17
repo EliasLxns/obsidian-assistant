@@ -147,10 +147,18 @@ def parse_file(file: Path, vault: Path) -> Note:
     return parse_markdown(file.read_text(encoding="utf-8"), rel)
 
 
+def is_note(path: Path, vault: Path) -> bool:
+    """Gehört die Datei in den Index? Markdown im Vault, nicht in versteckten Ordnern.
+
+    Prüft nur den Pfad, nicht ob die Datei existiert (der Watcher meldet auch Gelöschtes).
+    """
+    try:
+        teile = path.relative_to(vault).parts
+    except ValueError:
+        return False
+    return path.suffix == ".md" and not any(t.startswith(".") for t in teile)
+
+
 def iter_notes(vault: Path) -> list[Path]:
     """Alle Markdown-Dateien im Vault, ohne versteckte Ordner wie ``.obsidian`` oder ``.trash``."""
-    return sorted(
-        p
-        for p in vault.rglob("*.md")
-        if p.is_file() and not any(t.startswith(".") for t in p.relative_to(vault).parts)
-    )
+    return sorted(p for p in vault.rglob("*.md") if p.is_file() and is_note(p, vault))
