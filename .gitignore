@@ -19,6 +19,7 @@ htmlcov/
 
 # Daten und Index
 .chroma/
+.cache/
 chroma_data/
 data/
 *.sqlite3
