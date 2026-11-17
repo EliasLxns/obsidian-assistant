@@ -19,7 +19,11 @@ class Answer:
 
 
 def answer_question(question: str, retriever: Retriever, llm: LLM, k: int = 5) -> Answer:
-    hits = retriever.search(question, k)
+    return answer_from_hits(question, retriever.search(question, k), llm)
+
+
+def answer_from_hits(question: str, hits: list[Hit], llm: LLM) -> Answer:
+    """Antwort aus schon gefundenen Chunks (z. B. gefiltert wie im Nachtjob)."""
     if not hits:
         return Answer(KEINE_TREFFER, [])
     text = llm.generate(build_answer_prompt(question, hits), system=SYSTEM_PROMPT)
