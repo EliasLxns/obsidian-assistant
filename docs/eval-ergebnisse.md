@@ -22,9 +22,8 @@ Indexieren mit bge-m3: 79 Chunks in 87 s (erster Lauf, inklusive Laden des Model
 ### Nachvollziehen
 
 ```bash
-assistant index demo_vault/
 assistant eval --details --ausgabe eval/results/bge-m3.md
-EMBED_MODEL=nomic-embed-text CHROMA_PATH=./.chroma-nomic assistant eval --details --ausgabe eval/results/nomic-embed-text.md
+EMBED_MODEL=nomic-embed-text assistant eval --details --ausgabe eval/results/nomic-embed-text.md
 ```
 
-Die Rohausgaben je Frage landen in `eval/results/` (nicht im Repo).
+`assistant eval` baut sich einen eigenen Index im Speicher und fasst den echten Chroma-Index nicht an; ein vorheriges `assistant index` ist nicht nötig. Die Rohausgaben je Frage landen in `eval/results/` (nicht im Repo).
