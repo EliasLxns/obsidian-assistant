@@ -23,6 +23,9 @@ class Settings:
     chroma_path: Path = Path(".chroma")
     cache_path: Path = Path(".cache/embeddings.sqlite3")
     timeout_s: float = 120.0
+    chroma_host: str = ""  # leer: lokale Chroma-Datei unter chroma_path, sonst HTTP (Docker)
+    chroma_port: int = 8000
+    watch_polling: bool = False  # Watcher fragt ab statt inotify (Docker Desktop unter Windows)
 
 
 def read_env_file(path: Path) -> dict[str, str]:
@@ -58,4 +61,7 @@ def load_settings(
         chroma_path=Path(get("CHROMA_PATH", str(d.chroma_path))),
         cache_path=Path(get("EMBED_CACHE_PATH", str(d.cache_path))),
         timeout_s=float(get("OLLAMA_TIMEOUT", str(d.timeout_s))),
+        chroma_host=get("CHROMA_HOST", d.chroma_host),
+        chroma_port=int(get("CHROMA_PORT", str(d.chroma_port))),
+        watch_polling=get("WATCH_POLLING", "").lower() in {"1", "true", "ja", "yes"},
     )

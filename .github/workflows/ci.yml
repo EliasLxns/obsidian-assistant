@@ -31,3 +31,17 @@ jobs:
 
       - name: Pytest
         run: pytest
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compose-Datei prüfen
+        run: docker compose config -q
+
+      - name: Image bauen
+        run: docker build -t obsidian-assistant:ci .
+
+      - name: CLI im Image startet
+        run: docker run --rm obsidian-assistant:ci assistant --help

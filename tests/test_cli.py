@@ -3,7 +3,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from assistant.cli import Components, build_parser, main
+from assistant.cli import Components, build_parser, main, start_watch
 from assistant.config import Settings
 from assistant.index.embedder import FakeEmbedder, OllamaEmbedder
 from assistant.index.store import InMemoryStore
@@ -99,3 +99,33 @@ def test_ollama_nicht_erreichbar(capsys: pytest.CaptureFixture[str]) -> None:
 def test_vault_fehlt(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["index", str(tmp_path / "gibtsnicht")], FakeApp()) == 1
     assert "Vault nicht gefunden" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("argv", [["serve", "--port", "9000"], ["watch", "--warten", "0.5"]])
+def test_serve_und_watch_werden_erkannt(argv: list[str]) -> None:
+    assert build_parser().parse_args(argv).command == argv[0]
+
+
+def test_watch_indexiert_beim_start_und_bei_aenderungen(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import shutil
+    import time
+
+    vault = tmp_path / "vault"
+    shutil.copytree(DEMO_VAULT, vault)
+    app = FakeApp()
+    observer, batcher = start_watch(app.components, vault, delay=0.1)
+    try:
+        assert "Start: 25 Notizen" in capsys.readouterr().out
+        (vault / "00 Inbox/Neu.md").write_text("# Neu\n\nText.\n", encoding="utf-8")
+        for _ in range(50):
+            time.sleep(0.1)
+            if "Änderung: 1 Notizen" in capsys.readouterr().out:
+                break
+        else:
+            pytest.fail("Änderung wurde nicht nachindexiert")
+    finally:
+        observer.stop()
+        observer.join(timeout=5)
+        batcher.stop()

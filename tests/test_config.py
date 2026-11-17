@@ -20,3 +20,12 @@ def test_env_datei_und_umgebung(tmp_path: Path) -> None:
 def test_ohne_env_datei(tmp_path: Path) -> None:
     s = load_settings(tmp_path / "fehlt", environ={})
     assert s.vault_path == Path("demo_vault")
+
+
+def test_chroma_per_http(tmp_path: Path) -> None:
+    s = load_settings(tmp_path / "fehlt", environ={"CHROMA_HOST": "chroma", "CHROMA_PORT": "8001"})
+    assert (s.chroma_host, s.chroma_port) == ("chroma", 8001)
+    leer = load_settings(tmp_path / "fehlt", environ={})
+    assert leer.chroma_host == ""
+    assert not leer.watch_polling
+    assert load_settings(tmp_path / "fehlt", environ={"WATCH_POLLING": "true"}).watch_polling
