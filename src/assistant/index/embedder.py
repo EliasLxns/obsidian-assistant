@@ -11,6 +11,7 @@ import json
 import math
 import re
 import sqlite3
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -76,12 +77,16 @@ class EmbeddingCache:
 
     Beim Neuindexieren und bei jedem Eval-Lauf werden so nur geänderte Texte
     wirklich an Ollama geschickt.
+
+    Thread-sicher: Die API ruft den Cache aus dem Thread-Pool von FastAPI auf,
+    der Watcher aus seinem Timer-Thread. Eine Sperre schützt die eine Verbindung.
     """
 
     def __init__(self, path: Path | str = ":memory:") -> None:
         if isinstance(path, Path):
             path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(str(path))
+        self._db = sqlite3.connect(str(path), check_same_thread=False)
+        self._sperre = threading.Lock()
         self._db.execute("CREATE TABLE IF NOT EXISTS emb (key TEXT PRIMARY KEY, vec TEXT NOT NULL)")
 
     @staticmethod
@@ -93,22 +98,25 @@ class EmbeddingCache:
         for start in range(0, len(keys), 500):  # SQLite-Limit für Platzhalter
             teil = list(keys[start : start + 500])
             platzhalter = ",".join("?" * len(teil))
-            zeilen = self._db.execute(
-                f"SELECT key, vec FROM emb WHERE key IN ({platzhalter})", teil
-            ).fetchall()
+            with self._sperre:
+                zeilen = self._db.execute(
+                    f"SELECT key, vec FROM emb WHERE key IN ({platzhalter})", teil
+                ).fetchall()
             for key, vec in cast(list[tuple[str, str]], zeilen):
                 gefunden[key] = cast(Vector, json.loads(vec))
         return gefunden
 
     def put_many(self, items: dict[str, Vector]) -> None:
-        with self._db:
+        with self._sperre, self._db:
             self._db.executemany(
                 "INSERT OR REPLACE INTO emb (key, vec) VALUES (?, ?)",
                 [(k, json.dumps(v)) for k, v in items.items()],
             )
 
     def __len__(self) -> int:
-        (anzahl,) = cast(tuple[int], self._db.execute("SELECT COUNT(*) FROM emb").fetchone())
+        with self._sperre:
+            zeile = self._db.execute("SELECT COUNT(*) FROM emb").fetchone()
+        (anzahl,) = cast(tuple[int], zeile)
         return anzahl
 
     def close(self) -> None:

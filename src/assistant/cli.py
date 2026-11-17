@@ -1,7 +1,7 @@
-"""Kommandozeile: ``assistant index | ask | eval``.
+"""Kommandozeile: ``assistant index | ask | eval | serve | watch``.
 
-Die Bausteine (Embedder, VectorStore, LLM) kommen aus einer ``Components``-Fabrik.
-Im Normalbetrieb sind das Ollama und ChromaDB, in Tests Fakes.
+Die Bausteine (Embedder, VectorStore, LLM) kommen aus einer ``ComponentsFactory``
+(siehe ``assistant.components``). Im Normalbetrieb sind das Ollama und ChromaDB, in Tests Fakes.
 """
 
 from __future__ import annotations
@@ -9,43 +9,22 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Sequence
 from pathlib import Path
 
-from assistant.config import Settings, load_settings
+from watchdog.observers.api import BaseObserver
+
+from assistant.components import Components, ComponentsFactory, default_components
+from assistant.config import load_settings
 from assistant.evaluation import evaluate, format_details, format_table, load_questions
-from assistant.index.embedder import Embedder, EmbeddingCache, OllamaEmbedder, OllamaError
-from assistant.index.store import ChromaStore, InMemoryStore, VectorStore
+from assistant.index.embedder import OllamaError
+from assistant.index.store import InMemoryStore
 from assistant.ingest.chunker import DEFAULT_MAX_CHARS, DEFAULT_OVERLAP
-from assistant.ingest.indexer import index_vault
+from assistant.ingest.indexer import IndexReport, index_notes, index_vault
+from assistant.ingest.watcher import ChangeBatcher, watch_vault
 from assistant.links import obsidian_url
 from assistant.llm.answer import answer_question
-from assistant.llm.client import LLM, OllamaLLM
 from assistant.retrieval.search import Retriever
-
-
-@dataclass
-class Components:
-    settings: Settings
-    embedder: Embedder
-    store: VectorStore
-    llm: LLM
-
-
-ComponentsFactory = Callable[[Settings], Components]
-
-
-def default_components(settings: Settings) -> Components:
-    cache = EmbeddingCache(settings.cache_path)
-    return Components(
-        settings=settings,
-        embedder=OllamaEmbedder.for_model(
-            settings.ollama_url, settings.embed_model, cache=cache, timeout_s=settings.timeout_s
-        ),
-        store=ChromaStore(settings.chroma_path),
-        llm=OllamaLLM(settings.ollama_url, settings.chat_model, timeout_s=settings.timeout_s),
-    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -79,6 +58,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--ueberlappung", type=int, default=DEFAULT_OVERLAP)
     p_eval.add_argument("--details", action="store_true", help="Ergebnis je Frage zeigen")
     p_eval.add_argument("--ausgabe", help="Ergebnis zusätzlich als Markdown-Datei speichern")
+
+    p_serve = sub.add_parser("serve", help="REST-API starten (/ask, /search, /status, /reindex)")
+    p_serve.add_argument("--host", default="127.0.0.1", help="Im Container: 0.0.0.0")
+    p_serve.add_argument("--port", type=int, default=8080)
+
+    p_watch = sub.add_parser("watch", help="Vault beobachten und Änderungen nachindexieren")
+    p_watch.add_argument("pfad", nargs="?", help="Pfad zum Vault (Standard: VAULT_PATH aus .env)")
+    p_watch.add_argument(
+        "--warten", type=float, default=2.0, help="Sekunden Ruhe vor dem Indexieren (Standard: 2)"
+    )
     return parser
 
 
@@ -89,10 +78,7 @@ def _cmd_index(args: argparse.Namespace, c: Components) -> int:
         vault, c.embedder, c.store, max_chars=args.max_zeichen, overlap=args.ueberlappung
     )
     dauer = time.perf_counter() - start
-    print(
-        f"{r.notes} Notizen, {r.chunks} Chunks: {r.embedded} eingebettet, "
-        f"{r.unchanged} unverändert, {r.deleted} gelöscht ({dauer:.1f} s, {c.embedder.model_name})"
-    )
+    print(f"{_bericht(r)} ({dauer:.1f} s, {c.embedder.model_name})")
     return 0
 
 
@@ -153,7 +139,57 @@ def _cmd_eval(args: argparse.Namespace, c: Components) -> int:
     return 0
 
 
-_BEFEHLE = {"index": _cmd_index, "ask": _cmd_ask, "eval": _cmd_eval}
+def _cmd_serve(args: argparse.Namespace, c: Components) -> int:
+    import uvicorn  # erst hier: index/ask/eval brauchen keinen Webserver
+
+    from assistant.api import create_app
+
+    uvicorn.run(create_app(c), host=args.host, port=args.port)
+    return 0
+
+
+def _bericht(r: IndexReport) -> str:
+    return (
+        f"{r.notes} Notizen, {r.chunks} Chunks: {r.embedded} eingebettet, "
+        f"{r.unchanged} unverändert, {r.deleted} gelöscht"
+    )
+
+
+def start_watch(c: Components, vault: Path, delay: float) -> tuple[BaseObserver, ChangeBatcher]:
+    """Indexiert einmal komplett und beobachtet danach den Vault."""
+    print(f"Start: {_bericht(index_vault(vault, c.embedder, c.store))}", flush=True)
+
+    def nachindexieren(pfade: set[Path]) -> None:
+        r = index_notes(vault, pfade, c.embedder, c.store)
+        print(f"Änderung: {_bericht(r)}", flush=True)
+
+    batcher = ChangeBatcher(nachindexieren, delay=delay)
+    return watch_vault(vault, batcher, polling=c.settings.watch_polling), batcher
+
+
+def _cmd_watch(args: argparse.Namespace, c: Components) -> int:
+    vault = Path(args.pfad) if args.pfad else c.settings.vault_path
+    observer, batcher = start_watch(c, vault, args.warten)
+    print(f"Beobachte {vault} … (Strg+C beendet)", flush=True)
+    try:
+        while observer.is_alive():
+            observer.join(timeout=1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        observer.stop()
+        batcher.stop()
+        observer.join()
+    return 0
+
+
+_BEFEHLE = {
+    "index": _cmd_index,
+    "ask": _cmd_ask,
+    "eval": _cmd_eval,
+    "serve": _cmd_serve,
+    "watch": _cmd_watch,
+}
 
 
 def main(

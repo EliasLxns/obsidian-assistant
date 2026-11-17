@@ -83,3 +83,16 @@ def test_fehler_werden_zu_ollama_error() -> None:
     falsch = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={})))
     with pytest.raises(OllamaError):
         OllamaEmbedder("http://o:11434", "bge-m3", client=falsch).embed_query("x")
+
+
+def test_cache_aus_anderem_thread(tmp_path: Path) -> None:
+    """Die API nutzt den Cache aus dem Thread-Pool, der Watcher aus einem Timer-Thread."""
+    import threading
+
+    cache = EmbeddingCache(tmp_path / "cache.sqlite3")
+    cache.put_many({"a": [1.0, 0.0]})
+    ergebnis: list[dict[str, list[float]]] = []
+    t = threading.Thread(target=lambda: ergebnis.append(cache.get_many(["a"])))
+    t.start()
+    t.join()
+    assert ergebnis == [{"a": [1.0, 0.0]}]

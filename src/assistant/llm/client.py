@@ -77,3 +77,14 @@ class OllamaLLM:
         if not isinstance(inhalt, str):
             raise OllamaError("Ollama hat keine Antwort geliefert.")
         return inhalt.strip()
+
+
+def ollama_reachable(
+    base_url: str, *, timeout_s: float = 2.0, client: httpx.Client | None = None
+) -> bool:
+    """Antwortet Ollama? Kurzer Timeout, damit ``/status`` bei schlafendem Gaming-PC schnell ist."""
+    http = client or httpx.Client(timeout=timeout_s)
+    try:
+        return http.get(f"{base_url.rstrip('/')}/api/tags").is_success
+    except httpx.HTTPError:
+        return False
