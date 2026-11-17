@@ -32,6 +32,18 @@ def project_root(file: Path) -> Path:
     return file.parent
 
 
+def tool(name: str, root: Path) -> str | None:
+    """Werkzeug zuerst in der .venv des Projekts suchen, dann im PATH.
+
+    Unter Windows ist die .venv beim Hook-Aufruf meist nicht aktiviert.
+    """
+    for folder in (root / ".venv" / "Scripts", root / ".venv" / "bin"):
+        found = shutil.which(name, path=str(folder))
+        if found:
+            return found
+    return shutil.which(name)
+
+
 def main() -> int:
     try:
         event = json.load(sys.stdin)
@@ -46,14 +58,14 @@ def main() -> int:
     root = project_root(file)
 
     problems: list[str] = []
-    ruff = shutil.which("ruff")
+    ruff = tool("ruff", root)
     if ruff:
         run([ruff, "check", "--fix", "--quiet", str(file)], root)
         run([ruff, "format", "--quiet", str(file)], root)
         left = run([ruff, "check", "--quiet", str(file)], root)
         if left.returncode != 0:
             problems.append("ruff:\n" + (left.stdout + left.stderr).strip())
-    pyright = shutil.which("pyright")
+    pyright = tool("pyright", root)
     if pyright:
         typed = run([pyright, str(file)], root)
         if typed.returncode != 0:
