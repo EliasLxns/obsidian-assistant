@@ -2,7 +2,7 @@
 
 Ein lokaler RAG-Assistent für einen Obsidian-Vault. Er beantwortet Fragen an die eigenen Notizen mit Quellen-Links, sortiert nachts neue Notizen aus der Inbox ein und beantwortet „Frage:“-Notizen. Alles läuft zu Hause: keine Cloud-KI, keine Daten außer Haus.
 
-> **Status:** Phase 3 (Nachtjob). CLI `index`, `ask`, `eval` aus Phase 1, REST-API, Watcher und Docker Compose aus Phase 2, dazu der Nachtjob: Inbox sortieren, „Frage:“-Notizen beantworten, Wake-on-LAN, Gaming-Schutz, Protokoll und Rückgängig. Erster Eval-Lauf mit Ollama: bge-m3 erreicht Treffer@1 95 % und Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
+> **Status:** Phase 2 (API und Docker). CLI `index`, `ask`, `eval` aus Phase 1, dazu REST-API (`/ask`, `/search`, `/status`, `/reindex`), ein Watcher, der nur geänderte Notizen nachindexiert, und Docker Compose mit API, Indexer und ChromaDB. Erster Eval-Lauf mit Ollama: bge-m3 erreicht Treffer@1 95 % und Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
 
 ## Funktionen (Version 1)
 
@@ -81,39 +81,6 @@ Der Vault wird nur lesend eingebunden, die Container laufen ohne Root-Rechte. Ol
 
 Schläft der Gaming-PC, antworten `/ask`, `/search` und `/reindex` mit `503` und einem Hinweis; ein leerer Index ergibt `409`.
 
-## Nachtjob
-
-Jede Nacht (Standard 03:00) arbeitet der Nachtjob die Notizen in `00 Inbox` ab:
-
-| Notiz | Was passiert |
-|---|---|
-| „Frage:“-Notiz (Titel beginnt mit „Frage:“ oder Tag `frage`) | Antwort mit Quellen-Wikilinks wird unter `## Antwort des Assistenten` angehängt, die Notiz bleibt in der Inbox |
-| jede andere neue Notiz | Tags ins Frontmatter, verwandte Notizen unter `## Verwandt`, dann in einen **vorhandenen** Ordner verschoben |
-| Modell unsicher, Ordner unbekannt, Name schon belegt | nach `00 Inbox/Prüfen`, mit Vorschlag im Protokoll |
-
-**Sicherheitsnetz:** Vor und nach jedem Lauf ein Git-Commit im Vault. Jeder Lauf schreibt ein Protokoll nach `00 Inbox/Protokoll` und speichert die Originaltexte außerhalb des Vaults. `assistant nightly rueckgaengig` stellt alles wieder her, außer Notizen, die seitdem von Hand geändert wurden. Bestehende Notizen fasst die KI nie an, und Notizen, die in den letzten 30 Minuten bearbeitet wurden, bleiben liegen.
-
-**Gaming-Schutz:** Läuft nur im Zeitfenster (Standard 01:00–06:00), lässt sich pausieren und entlädt die Modelle nach jedem Lauf sofort aus dem VRAM. Optional (`NIGHTLY_SKIP_IF_AWAKE=true`) bleibt ein PC in Ruhe, der schon lief, bevor der Nachtjob ihn wecken wollte.
-
-```bash
-assistant nightly --probelauf --jetzt    # zeigen, was passieren würde, nichts schreiben
-assistant nightly --jetzt                # einmal sofort laufen
-assistant nightly pause --stunden 12     # z. B. für eine lange Gaming-Session
-assistant nightly weiter
-assistant nightly laeufe                 # die letzten Läufe
-assistant nightly rueckgaengig [LAUF]    # Standard: der letzte Lauf
-```
-
-Im Compose-Betrieb startet der Nachtjob nur auf Wunsch, weil er in den Vault schreibt:
-
-```bash
-docker compose --profile nachtjob up -d                                   # vorerst auf dem Gaming-PC
-docker compose -f docker-compose.yml -f compose.minipc.yml --profile nachtjob up -d   # Mini-PC
-docker compose exec nachtjob assistant nightly --probelauf --jetzt
-```
-
-Auf dem Mini-PC läuft der Nachtjob im Netz des Hosts, damit das Wake-on-LAN-Paket das Heimnetz erreicht (`GAMING_PC_MAC` in `.env`). Solange alles auf dem Gaming-PC läuft, bleibt `GAMING_PC_MAC` leer.
-
 ## Aufbau des Codes
 
 | Modul | Aufgabe |
@@ -129,16 +96,9 @@ Auf dem Mini-PC läuft der Nachtjob im Netz des Hosts, damit das Wake-on-LAN-Pak
 | `evaluation.py` | Eval-Set laden, Treffer@k je Fragetyp |
 | `api/app.py` | FastAPI: `/ask`, `/search`, `/status`, `/reindex` |
 | `components.py` | Baut Embedder, VectorStore und LLM aus der Konfiguration (Chroma lokal oder per HTTP) |
-| `nightly/wol.py` | Magic Packet senden, auf Ollama warten, Paket bei Bedarf wiederholen |
-| `nightly/guard.py` | Gaming-Schutz: Zeitfenster, Pause-Schalter, Startzeit |
-| `nightly/inbox.py` | Inbox-Notizen finden, Ordner und Tags per JSON vom Modell, Tags und Links einfügen |
-| `nightly/questions.py` | „Frage:“-Notizen beantworten |
-| `nightly/protocol.py` | Protokoll (Markdown + JSON) und Rückgängig |
-| `nightly/vault_git.py` | Git-Commit vor und nach dem Lauf |
-| `nightly/job.py` | Ein Nachtlauf von Wecken bis Entladen |
-| `cli.py` | Befehle `index`, `ask`, `eval`, `serve`, `watch` und `nightly` |
+| `cli.py` | Befehle `index`, `ask`, `eval`, `serve` und `watch` |
 
-Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), `FakeLLM`, `FakeWaker` und einem simulierten Ollama-Server (`httpx.MockTransport`). Der Nachtjob wird auf einer Kopie des Demo-Vaults mit echtem Git getestet, inklusive Rückgängig. Die API wird mit dem `TestClient` von FastAPI getestet, der Watcher mit einem echten `watchdog`-Observer auf einer Kopie des Demo-Vaults.
+Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), `FakeLLM` und einem simulierten Ollama-Server (`httpx.MockTransport`). Die API wird mit dem `TestClient` von FastAPI getestet, der Watcher mit einem echten `watchdog`-Observer auf einer Kopie des Demo-Vaults.
 
 ## Demo-Vault und Evaluation
 

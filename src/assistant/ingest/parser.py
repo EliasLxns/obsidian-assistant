@@ -70,7 +70,7 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     return cast(dict[str, Any], daten), rest
 
 
-def frontmatter_tags(frontmatter: dict[str, Any]) -> list[str]:
+def _frontmatter_tags(frontmatter: dict[str, Any]) -> list[str]:
     roh: object = frontmatter.get("tags", frontmatter.get("tag"))
     if roh is None:
         return []
@@ -90,7 +90,7 @@ def _unique(werte: list[str]) -> tuple[str, ...]:
 def parse_markdown(text: str, path: str) -> Note:
     """Zerlegt den Text einer Notiz. ``path`` ist der Pfad relativ zum Vault."""
     frontmatter, body = split_frontmatter(text)
-    tags = frontmatter_tags(frontmatter)
+    tags = _frontmatter_tags(frontmatter)
     links: list[str] = []
 
     sections: list[Section] = []

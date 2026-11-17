@@ -85,9 +85,7 @@ class EmbeddingCache:
     def __init__(self, path: Path | str = ":memory:") -> None:
         if isinstance(path, Path):
             path.parent.mkdir(parents=True, exist_ok=True)
-        # Indexer, API und Nachtjob teilen sich die Datei: lieber warten als „database is locked“.
-        self._db = sqlite3.connect(str(path), check_same_thread=False, timeout=60)
-        self._db.execute("PRAGMA journal_mode=WAL")
+        self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._sperre = threading.Lock()
         self._db.execute("CREATE TABLE IF NOT EXISTS emb (key TEXT PRIMARY KEY, vec TEXT NOT NULL)")
 

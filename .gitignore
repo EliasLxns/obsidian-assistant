@@ -24,7 +24,6 @@ chroma_data/
 data/
 *.sqlite3
 eval/results/
-.nachtjob/
 
 # Echte Vaults gehören nie ins Repo
 vault/
