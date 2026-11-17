@@ -1,5 +1,10 @@
-# Ein Image für API und Indexer; der Befehl kommt aus docker-compose.yml.
+# Ein Image für API, Indexer und Nachtjob; der Befehl kommt aus docker-compose.yml.
 FROM python:3.12-slim
+
+# git: Der Nachtjob sichert den Vault vor jedem Lauf mit einem Commit.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -18,9 +23,9 @@ RUN mkdir -p src/assistant && touch src/assistant/__init__.py \
 COPY src ./src
 RUN pip install --no-deps .
 
-# Ohne Root-Rechte laufen; der Vault wird nur lesend eingebunden.
+# Ohne Root-Rechte laufen. API und Indexer sehen den Vault nur lesend, der Nachtjob schreibt.
 RUN useradd --create-home --uid 1000 assistant \
-    && mkdir -p /cache && chown assistant /cache
+    && mkdir -p /cache /state && chown assistant /cache /state
 USER assistant
 
 EXPOSE 8080
