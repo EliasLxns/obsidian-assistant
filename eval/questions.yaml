@@ -2,7 +2,8 @@
 # Pfade in "erwartet" sind relativ zu demo_vault/.
 # typ: exakt = exakter Begriff aus der Notiz, umschreibung = mit anderen Worten,
 #      mehrere = Antwort braucht mehrere Notizen (erwartet ist dann eine Liste).
-# Treffer@k zählt, wenn eine (bei "mehrere": jede) erwartete Notiz unter den ersten k Treffern ist.
+# Treffer@k zählt, wenn die erwartete Notiz unter den ersten k Notizen ist. Bei "mehrere" müssen
+# so viele erwartete Notizen unter den ersten k sein, wie hineinpassen (Treffer@1: eine, Treffer@5: alle).
 
 # --- Exakte Begriffe ---
 - frage: "Welchen Port nutzt Ollama?"
