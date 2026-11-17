@@ -2,7 +2,7 @@
 
 Ein lokaler RAG-Assistent für einen Obsidian-Vault. Er beantwortet Fragen an die eigenen Notizen mit Quellen-Links, sortiert nachts neue Notizen aus der Inbox ein und beantwortet „Frage:“-Notizen. Alles läuft zu Hause: keine Cloud-KI, keine Daten außer Haus.
 
-> **Status:** Phase 1 (CLI-MVP). `assistant index`, `ask` und `eval` sind implementiert und getestet; der erste Eval-Lauf mit Ollama steht noch aus.
+> **Status:** Phase 1 (CLI-MVP). `assistant index`, `ask` und `eval` sind implementiert und getestet; erster Eval-Lauf mit Ollama: bge-m3 erreicht Treffer@1 95 % und Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
 
 ## Funktionen (Version 1)
 
