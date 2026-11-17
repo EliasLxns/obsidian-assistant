@@ -2,7 +2,7 @@
 
 Ein lokaler RAG-Assistent für einen Obsidian-Vault. Er beantwortet Fragen an die eigenen Notizen mit Quellen-Links, sortiert nachts neue Notizen aus der Inbox ein und beantwortet „Frage:“-Notizen. Alles läuft zu Hause: keine Cloud-KI, keine Daten außer Haus.
 
-> **Status:** Phase 1 (CLI-MVP). `assistant index`, `ask` und `eval` sind implementiert und getestet; erster Eval-Lauf mit Ollama: bge-m3 erreicht Treffer@1 95 % und Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
+> **Status:** Phase 2 (API und Docker). CLI `index`, `ask`, `eval` aus Phase 1, dazu REST-API (`/ask`, `/search`, `/status`, `/reindex`), ein Watcher, der nur geänderte Notizen nachindexiert, und Docker Compose mit API, Indexer und ChromaDB. Erster Eval-Lauf mit Ollama: bge-m3 erreicht Treffer@1 95 % und Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
 
 ## Funktionen (Version 1)
 
@@ -46,7 +46,36 @@ assistant index demo_vault/                  # nur Geändertes wird neu eingebet
 assistant ask "Welchen Port nutzt Ollama?"   # Antwort mit Quellen als obsidian://-Links
 assistant ask --nur-suche "Eisheiligen"      # nur Quellen, ohne Chat-Modell
 assistant eval --details                     # Treffer@1 / Treffer@5 als Tabelle
+assistant serve                              # REST-API auf http://127.0.0.1:8080, Doku unter /docs
+assistant watch                              # Vault beobachten, Änderungen nachindexieren
 ```
+
+## Betrieb mit Docker Compose
+
+```bash
+cp .env.example .env        # OLLAMA_URL auf den Gaming-PC, VAULT_HOST_PATH auf den Vault
+docker compose up -d --build
+curl localhost:8080/status
+```
+
+| Dienst | Aufgabe |
+|---|---|
+| `chroma` | ChromaDB, nur im internen Compose-Netz erreichbar, Daten im Volume `chroma` |
+| `indexer` | `assistant watch`: beim Start alles indexieren, danach nur geänderte Notizen |
+| `api` | `assistant serve` auf Port 8080 |
+
+Der Vault wird nur lesend eingebunden, die Container laufen ohne Root-Rechte. Ollama läuft nicht im Compose, sondern auf dem Gaming-PC.
+
+### API
+
+| Endpunkt | Zweck |
+|---|---|
+| `POST /ask` `{"frage": "...", "k": 5}` | Antwort mit nummerierten Quellen (`obsidian://`-Link, Auszug, Score) |
+| `POST /search` `{"frage": "...", "k": 5}` | Nur Quellen, ohne Chat-Modell |
+| `GET /status` | Anzahl Chunks, Modelle, letzter Indexlauf, ist Ollama erreichbar |
+| `POST /reindex` | Vault abgleichen, nur Geändertes wird eingebettet |
+
+Schläft der Gaming-PC, antworten `/ask`, `/search` und `/reindex` mit `503` und einem Hinweis; ein leerer Index ergibt `409`.
 
 ## Aufbau des Codes
 
@@ -54,15 +83,18 @@ assistant eval --details                     # Treffer@1 / Treffer@5 als Tabelle
 |---|---|
 | `ingest/parser.py` | Frontmatter, Tags, Wikilinks und Überschriften aus Markdown |
 | `ingest/chunker.py` | Ein Chunk pro Abschnitt, lange Abschnitte mit Längenlimit und Überlappung |
-| `ingest/indexer.py` | Vault indexieren, nur geänderte Chunks einbetten, gelöschte entfernen |
+| `ingest/indexer.py` | Vault oder einzelne Notizen indexieren, nur geänderte Chunks einbetten, gelöschte entfernen |
+| `ingest/watcher.py` | `watchdog`-Meldungen sammeln und nach einer Ruhepause gebündelt nachindexieren, bei Fehlern erneut versuchen |
 | `index/embedder.py` | Interface `Embedder`, `OllamaEmbedder` (Batching, SQLite-Hash-Cache), `FakeEmbedder` |
 | `index/store.py` | Interface `VectorStore`, `ChromaStore` (Metadaten: Pfad, Überschrift, Tags, Hash, Modell), `InMemoryStore` |
 | `retrieval/search.py` | Vektorsuche, beste Notizen; Hybrid-Suche folgt hinter derselben Schnittstelle |
 | `llm/` | Interface `LLM`, `OllamaLLM`, `FakeLLM`, Prompts, Antwort mit nummerierten Quellen |
 | `evaluation.py` | Eval-Set laden, Treffer@k je Fragetyp |
-| `cli.py` | Befehle `index`, `ask` und `eval` |
+| `api/app.py` | FastAPI: `/ask`, `/search`, `/status`, `/reindex` |
+| `components.py` | Baut Embedder, VectorStore und LLM aus der Konfiguration (Chroma lokal oder per HTTP) |
+| `cli.py` | Befehle `index`, `ask`, `eval`, `serve` und `watch` |
 
-Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), `FakeLLM` und einem simulierten Ollama-Server (`httpx.MockTransport`).
+Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), `FakeLLM` und einem simulierten Ollama-Server (`httpx.MockTransport`). Die API wird mit dem `TestClient` von FastAPI getestet, der Watcher mit einem echten `watchdog`-Observer auf einer Kopie des Demo-Vaults.
 
 ## Demo-Vault und Evaluation
 
