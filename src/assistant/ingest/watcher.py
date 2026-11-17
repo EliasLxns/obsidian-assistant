@@ -105,14 +105,17 @@ class VaultEventHandler(FileSystemEventHandler):
             self._melden(event.dest_path)  # Umbenennen = alte Notiz weg, neue da
 
 
-def watch_vault(vault: Path, batcher: ChangeBatcher, *, polling: bool = False) -> BaseObserver:
+def watch_vault(
+    vault: Path, batcher: ChangeBatcher, *, polling: bool = False, poll_interval: float = 10.0
+) -> BaseObserver:
     """Startet die Beobachtung im Hintergrund. Beenden mit ``observer.stop()``.
 
     ``polling=True`` fragt das Dateisystem regelmäßig ab, statt auf Meldungen des
     Betriebssystems zu warten. Nötig, wenn der Vault per Docker Desktop von Windows
     eingebunden ist; dort kommen keine inotify-Meldungen im Container an.
+    ``poll_interval`` ist bewusst groß: Der Gaming-PC soll beim Spielen nicht belastet werden.
     """
-    observer: BaseObserver = PollingObserver() if polling else Observer()
+    observer: BaseObserver = PollingObserver(timeout=poll_interval) if polling else Observer()
     observer.schedule(VaultEventHandler(vault, batcher), str(vault), recursive=True)
     observer.start()
     return observer

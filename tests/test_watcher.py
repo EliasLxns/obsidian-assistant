@@ -91,7 +91,7 @@ def test_watcher_indexiert_neue_notiz(tmp_path: Path, polling: bool) -> None:
             fertig.set()
 
     batcher = ChangeBatcher(nachindexieren, delay=0.1)
-    observer = watch_vault(vault, batcher, polling=polling)
+    observer = watch_vault(vault, batcher, polling=polling, poll_interval=0.2)
     try:
         (vault / "00 Inbox/Watcher.md").write_text("# Watcher\n\nHallo.\n", encoding="utf-8")
         assert _warte_bis(fertig), "Watcher hat die neue Notiz nicht indexiert"
