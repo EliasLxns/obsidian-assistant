@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$(command -v python3 || command -v python)\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_python.py\"",
+            "command": "$(python3 -c \"\" 2>/dev/null && echo python3 || echo python) -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_python.py\"",
             "timeout": 180
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$(command -v python3 || command -v python)\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/run_tests.py\"",
+            "command": "$(python3 -c \"\" 2>/dev/null && echo python3 || echo python) -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/run_tests.py\"",
             "timeout": 320
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$(command -v python3 || command -v python)\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/capture_rules.py\"",
+            "command": "$(python3 -c \"\" 2>/dev/null && echo python3 || echo python) -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/capture_rules.py\"",
             "timeout": 10
           }
         ]
