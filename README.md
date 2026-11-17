@@ -2,7 +2,7 @@
 
 Ein lokaler RAG-Assistent für einen Obsidian-Vault. Er beantwortet Fragen an die eigenen Notizen mit Quellen-Links, sortiert nachts neue Notizen aus der Inbox ein und beantwortet „Frage:“-Notizen. Alles läuft zu Hause: keine Cloud-KI, keine Daten außer Haus.
 
-> **Status:** Phase 0 (Vorbereitung). Das Repo enthält Struktur, Demo-Vault und Eval-Set; der Code folgt ab Phase 1.
+> **Status:** Phase 1 (CLI-MVP). `assistant index`, `ask` und `eval` sind implementiert und getestet; der erste Eval-Lauf mit Ollama steht noch aus.
 
 ## Funktionen (Version 1)
 
@@ -39,13 +39,30 @@ cp .env.example .env   # Ollama-URL und Vault-Pfad anpassen
 ruff check . && ruff format --check . && pyright && pytest
 ```
 
-Ab Phase 1:
+Mit Ollama (Embedding- und Chat-Modell vorher holen: `ollama pull bge-m3`, `ollama pull qwen2.5:7b-instruct-q4_K_M`):
 
 ```bash
-assistant index demo_vault/
-assistant ask "Welchen Port nutzt Ollama?"
-assistant eval
+assistant index demo_vault/                  # nur Geändertes wird neu eingebettet
+assistant ask "Welchen Port nutzt Ollama?"   # Antwort mit Quellen als obsidian://-Links
+assistant ask --nur-suche "Eisheiligen"      # nur Quellen, ohne Chat-Modell
+assistant eval --details                     # Treffer@1 / Treffer@5 als Tabelle
 ```
+
+## Aufbau des Codes
+
+| Modul | Aufgabe |
+|---|---|
+| `ingest/parser.py` | Frontmatter, Tags, Wikilinks und Überschriften aus Markdown |
+| `ingest/chunker.py` | Ein Chunk pro Abschnitt, lange Abschnitte mit Längenlimit und Überlappung |
+| `ingest/indexer.py` | Vault indexieren, nur geänderte Chunks einbetten, gelöschte entfernen |
+| `index/embedder.py` | Interface `Embedder`, `OllamaEmbedder` (Batching, SQLite-Hash-Cache), `FakeEmbedder` |
+| `index/store.py` | Interface `VectorStore`, `ChromaStore` (Metadaten: Pfad, Überschrift, Tags, Hash, Modell), `InMemoryStore` |
+| `retrieval/search.py` | Vektorsuche, beste Notizen; Hybrid-Suche folgt hinter derselben Schnittstelle |
+| `llm/` | Interface `LLM`, `OllamaLLM`, `FakeLLM`, Prompts, Antwort mit nummerierten Quellen |
+| `evaluation.py` | Eval-Set laden, Treffer@k je Fragetyp |
+| `cli.py` | Befehle `index`, `ask` und `eval` |
+
+Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), `FakeLLM` und einem simulierten Ollama-Server (`httpx.MockTransport`).
 
 ## Demo-Vault und Evaluation
 
