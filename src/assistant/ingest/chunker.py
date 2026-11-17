@@ -72,8 +72,8 @@ def split_text(
     """
     if max_chars <= 0:
         raise ValueError("max_chars muss positiv sein")
-    if not 0 <= overlap < max_chars:
-        raise ValueError("overlap muss zwischen 0 und max_chars liegen")
+    if not 0 <= overlap <= max_chars // 2:
+        raise ValueError("overlap muss zwischen 0 und der Hälfte von max_chars liegen")
     text = text.strip()
     if len(text) <= max_chars:
         return [text] if text else []

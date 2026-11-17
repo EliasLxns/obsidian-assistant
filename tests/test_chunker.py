@@ -39,6 +39,8 @@ def test_ungueltige_parameter() -> None:
         split_text("x", max_chars=0, overlap=0)
     with pytest.raises(ValueError):
         split_text("x", max_chars=100, overlap=100)
+    with pytest.raises(ValueError):  # würde sonst endlos hart teilen
+        split_text("x" * 200, max_chars=100, overlap=99)
 
 
 def test_chunks_einer_notiz() -> None:
