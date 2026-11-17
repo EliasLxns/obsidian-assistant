@@ -1,5 +1,11 @@
-# Dienste auf dem Mini-PC. Ollama läuft nicht hier, sondern auf dem Gaming-PC
-# (OLLAMA_URL in .env). Start: `cp .env.example .env`, anpassen, `docker compose up -d --build`.
+# Dienste des Assistenten. Ollama läuft nicht in Compose.
+#
+# Vorerst: alles auf dem Gaming-PC (Docker Desktop), Ollama direkt auf dem Host,
+#          erreichbar über host.docker.internal (Standard).
+# Später:  Umzug auf den Mini-PC, dann OLLAMA_URL_DOCKER=http://<IP-des-Gaming-PCs>:11434
+#          und WATCH_POLLING=false in .env. Sonst ändert sich nichts.
+#
+# Start: `cp .env.example .env`, anpassen, `docker compose up -d --build`.
 #
 #   chroma   Vektor-DB, nur im internen Netz erreichbar
 #   indexer  indexiert beim Start komplett, danach nur geänderte Notizen (watchdog)
@@ -11,7 +17,8 @@ x-assistant: &assistant
   env_file:
     - path: .env
       required: false  # ohne .env laufen Standardwerte, z. B. für einen Testlauf
-  environment: &env
+  environment:
+    OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11434}
     VAULT_PATH: /vault
     CHROMA_HOST: chroma
     CHROMA_PORT: "8000"
@@ -19,6 +26,8 @@ x-assistant: &assistant
   volumes:
     - ${VAULT_HOST_PATH:-./demo_vault}:/vault:ro
     - cache:/cache
+  extra_hosts:
+    - "host.docker.internal:host-gateway"  # unter Linux nötig, Docker Desktop kennt den Namen schon
   depends_on:
     chroma:
       condition: service_healthy

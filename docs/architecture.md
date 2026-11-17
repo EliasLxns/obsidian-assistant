@@ -42,6 +42,8 @@ flowchart LR
 
 ## Phase 2: Dienste und inkrementelles Indexieren
 
+Bis der Mini-PC da ist, laufen die Container mit Docker Desktop auf dem Gaming-PC und erreichen Ollama über `host.docker.internal`. Für den Umzug ändern sich nur zwei Werte in `.env` (`OLLAMA_URL_DOCKER`, `WATCH_POLLING`).
+
 Ein Docker-Image, zwei Befehle: `assistant watch` (Indexer) und `assistant serve` (API). Beide sprechen ChromaDB per HTTP an (`CHROMA_HOST=chroma`) und teilen sich den Embedding-Cache im Volume `cache`.
 
 ```mermaid

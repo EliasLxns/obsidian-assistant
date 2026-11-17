@@ -24,7 +24,7 @@ Der Obsidian-Assistent macht einen Obsidian-Vault durchsuchbar und befragbar, ko
 
 | Komponente | Aufgabe | Technik | Ort | Schnittstelle |
 |---|---|---|---|---|
-| Sync | Hält den Vault aktuell | `obsidian-headless` | Mini-PC (systemd) | Dateisystem `~/Obsidian/Brain` |
+| Sync | Hält den Vault aktuell | `obsidian-headless` | Mini-PC (systemd) | Dateisystem `~/Obsidian/<Vault>` |
 | Indexer | Erkennt Änderungen, parst, chunkt, bettet ein | Python, `watchdog` | Mini-PC (Container) | Liest Vault nur lesend, schreibt in Chroma |
 | Vektor-DB | Speichert Chunks, Vektoren, Metadaten | ChromaDB | Mini-PC (Container) | HTTP, intern Port 8000 |
 | Retriever | Hybrid-Suche + Link-Erweiterung | Python, BM25 + Chroma | Teil der API | Python-Interface |
@@ -98,6 +98,7 @@ Fehlt `ruff`, `pyright` oder `pytest`, überspringen die Hooks still. Deshalb zu
 - Ein Branch pro Funktion, kleine Commits im Stil `feat:`, `fix:`, `docs:`, `test:`, `chore:`
 - Tests laufen ohne Ollama über einen `FakeEmbedder` und ein `FakeLLM`
 - **Niemals echte Notizen ins Repo, in Logs oder Issues.** Nur `demo_vault/` verwenden
+- **Nichts Persönliches ins öffentliche Repo:** keine echten IPs, MAC-Adressen, Pfade (z. B. Laufwerke, Benutzerordner), Vault-, Benutzer- oder Rechnernamen. Nur Platzhalter oder die fiktiven Demo-Werte; echte Werte gehören in `.env` oder ins private Handbuch
 - Die KI bearbeitet keine bestehenden Notizen; der Nachtjob schreibt nur in `00 Inbox`, mit Git-Commit davor, unsichere Fälle nach `00 Inbox/Prüfen`
 - Keine Frameworks wie LangChain/LlamaIndex einführen
 - Jede Änderung an Chunking, Modell oder Suche mit `assistant eval` messen und das Ergebnis festhalten

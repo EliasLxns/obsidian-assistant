@@ -27,7 +27,6 @@ eval/results/
 
 # Echte Vaults gehören nie ins Repo
 vault/
-Brain/
 
 # Obsidian-Arbeitsdateien im Demo-Vault
 demo_vault/.obsidian/workspace*.json

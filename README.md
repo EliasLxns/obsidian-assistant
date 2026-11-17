@@ -53,10 +53,14 @@ assistant watch                              # Vault beobachten, Änderungen nac
 ## Betrieb mit Docker Compose
 
 ```bash
-cp .env.example .env        # OLLAMA_URL auf den Gaming-PC, VAULT_HOST_PATH auf den Vault
+cp .env.example .env        # VAULT_HOST_PATH auf den Vault, Rest passt für den Start
 docker compose up -d --build
 curl localhost:8080/status
 ```
+
+**Vorerst auf dem Gaming-PC:** Solange der Mini-PC fehlt, läuft der Stack mit Docker Desktop auf dem Gaming-PC selbst. Ollama läuft dort direkt (nicht im Container) und ist aus den Containern über `host.docker.internal:11434` erreichbar, das ist der Standard. Weil Docker Desktop unter Windows keine Dateiänderungen in Container meldet, fragt der Watcher den Vault alle 10 s ab (`WATCH_POLLING=true`). Zum Spielen lässt sich alles mit `docker compose stop` anhalten.
+
+**Später auf dem Mini-PC:** Repo und `.env` mitnehmen, in `.env` `OLLAMA_URL_DOCKER=http://<IP-des-Gaming-PCs>:11434` und `WATCH_POLLING=false` setzen, `VAULT_HOST_PATH` auf den Headless-Sync-Ordner. Der Index wird beim ersten Start neu aufgebaut.
 
 | Dienst | Aufgabe |
 |---|---|
@@ -64,7 +68,7 @@ curl localhost:8080/status
 | `indexer` | `assistant watch`: beim Start alles indexieren, danach nur geänderte Notizen |
 | `api` | `assistant serve` auf Port 8080 |
 
-Der Vault wird nur lesend eingebunden, die Container laufen ohne Root-Rechte. Ollama läuft nicht im Compose, sondern auf dem Gaming-PC.
+Der Vault wird nur lesend eingebunden, die Container laufen ohne Root-Rechte. Ollama läuft nicht im Compose, sondern direkt auf dem Gaming-PC.
 
 ### API
 
