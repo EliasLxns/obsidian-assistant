@@ -1,5 +1,6 @@
 """Ein ganzer Nachtlauf auf einer Kopie des Demo-Vaults, mit Fakes statt Ollama."""
 
+import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta
@@ -28,6 +29,10 @@ JETZT = datetime(2026, 11, 18, 3, 0)
 def vault(tmp_path: Path) -> Path:
     ziel = tmp_path / "vault"
     shutil.copytree(DEMO_VAULT, ziel)
+    # Inbox-Notizen „von gestern“: frisch ausgecheckte Dateien wären sonst zu neu (min_alter)
+    gestern = (datetime.now() - timedelta(days=1)).timestamp()
+    for datei in (ziel / "00 Inbox").glob("*.md"):
+        os.utime(datei, (gestern, gestern))
     return ziel
 
 
