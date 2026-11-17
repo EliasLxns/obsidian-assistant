@@ -112,7 +112,7 @@ docker compose -f docker-compose.yml -f compose.minipc.yml --profile nachtjob up
 docker compose exec nachtjob assistant nightly --probelauf --jetzt
 ```
 
-**Ausschalten nach getaner Arbeit:** Hat der Nachtjob den Gaming-PC geweckt, schaltet er ihn per SSH wieder aus, sobald 15 Minuten lang nichts mehr zu tun ist. Benutzt jemand Maus oder Tastatur oder läuft ein Spiel, bleibt der PC an. Einrichtung und Regeln: [docs/gaming-pc-ausschalten.md](docs/gaming-pc-ausschalten.md). `assistant nightly ausschalten --pruefen` zeigt die Messwerte, ohne auszuschalten.
+**Ausschalten nach getaner Arbeit:** Hat der Nachtjob den Gaming-PC geweckt, schaltet er ihn per SSH wieder aus, sobald 15 Minuten lang nichts mehr zu tun ist. Ist der PC entsperrt (jemand sitzt davor) oder läuft ein Spiel, bleibt er an. Automatisch greift das erst auf dem Mini-PC, vorher kann der Nachtjob den PC ja nicht wecken. Einrichtung und Regeln: [docs/gaming-pc-ausschalten.md](docs/gaming-pc-ausschalten.md). `assistant nightly ausschalten --pruefen` zeigt die Messwerte, ohne auszuschalten.
 
 Auf dem Mini-PC läuft der Nachtjob im Netz des Hosts, damit das Wake-on-LAN-Paket das Heimnetz erreicht (`GAMING_PC_MAC` in `.env`). Solange alles auf dem Gaming-PC läuft, bleibt `GAMING_PC_MAC` leer.
 

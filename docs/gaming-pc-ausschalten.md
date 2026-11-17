@@ -2,14 +2,16 @@
 
 Wake-on-LAN kann den Gaming-PC nur einschalten. Zum Ausschalten meldet sich der Nachtjob per SSH an und ruft `shutdown` auf. Er tut das nur, wenn er den PC selbst geweckt hat und danach alles ruhig ist.
 
+> **Wann es greift:** Automatisch erst nach dem Umzug auf den Mini-PC. Solange der Stack auf dem Gaming-PC läuft, kann der Nachtjob den PC nicht wecken (er läuft ja nur, wenn der PC an ist), also schaltet er ihn auch nie von selbst aus. Von Hand geht es schon jetzt: `assistant nightly ausschalten`.
+
 ## Wann ausgeschaltet wird
 
 ```mermaid
 flowchart TD
     A[Nachtlauf fertig] --> B{Hat der Nachtjob<br/>den PC geweckt?}
     B -- nein, lief schon --> X[PC bleibt an]
-    B -- ja --> C[jede Minute messen:<br/>Ollama, Eingaben, GPU]
-    C --> D{Maus/Tastatur benutzt<br/>oder GPU ohne Ollama?}
+    B -- ja --> C[jede Minute messen:<br/>Sperrbildschirm, Ollama, GPU]
+    C --> D{PC entsperrt<br/>oder GPU ohne Ollama?}
     D -- ja --> X
     D -- nein --> E{Ollama hat ein<br/>Modell geladen?}
     E -- ja, es läuft noch Arbeit --> F[Ruhe-Zähler auf 0] --> C
@@ -19,7 +21,7 @@ flowchart TD
 ```
 
 - **Weitere Arbeit:** Solange Ollama ein Modell geladen hat, läuft gerade oder lief eben eine Anfrage (Nachtjob, Dashboard, Plugin). Dann beginnt die Ruhezeit von vorn. Ausgeschaltet wird erst, wenn `SHUTDOWN_RUHE_MIN` Minuten (Standard 15) am Stück nichts passiert ist.
-- **Jemand sitzt davor:** Der Leerlauf aus `quser` springt zurück, sobald jemand Maus oder Tastatur benutzt. Dann bricht der Nachtjob das Ausschalten ab. Das Gleiche gilt, wenn die GPU arbeitet, ohne dass Ollama ein Modell geladen hat (vermutlich ein Spiel).
+- **Jemand sitzt davor:** Nach dem Autologon sperrt eine geplante Aufgabe den PC sofort. Ist er entsperrt, sitzt jemand davor, und der Nachtjob bricht ab. Erkannt wird das am Prozess `LogonUI.exe`, den Windows nur für Sperr- und Anmeldebildschirm startet. Ebenso bricht er ab, wenn die GPU arbeitet, ohne dass Ollama ein Modell geladen hat (vermutlich ein Spiel), oder wenn sich etwas nicht messen lässt. Im Zweifel bleibt der PC an.
 - **Höchstens warten:** Nach `SHUTDOWN_MAX_WARTEN_MIN` (Standard 120) gibt der Nachtjob auf und lässt den PC an.
 - **Abbrechen:** Innerhalb der Minute Vorwarnung am PC `shutdown /a` eingeben.
 
@@ -59,6 +61,6 @@ Das funktioniert gleich, wenn der Stack später auf den Mini-PC umzieht. Nur das
    docker compose exec nachtjob assistant nightly ausschalten --pruefen
    ```
 
-   Das zeigt, ob Ollama beschäftigt ist, seit wann keine Eingabe kam, die GPU-Last und die Bewertung.
+   Das zeigt, ob Ollama beschäftigt ist, ob der PC gesperrt ist, die GPU-Last und die Bewertung.
 
 `assistant nightly ausschalten` (ohne `--pruefen`) wartet auf Ruhe und schaltet dann wirklich aus. Das ist gut für einen echten Test vor dem Schlafengehen.

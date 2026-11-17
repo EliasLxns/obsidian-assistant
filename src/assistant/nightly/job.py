@@ -64,7 +64,7 @@ def run_nightly(
     sleep: Callable[[float], None] = time.sleep,
 ) -> Lauf:
     """Ein Nachtlauf. ``ausschalten`` wartet auf Ruhe und fährt den PC herunter (power.py);
-    es wird nur aufgerufen, wenn dieser Lauf den PC selbst geweckt hat."""
+    es wird nur aufgerufen, wenn dieser Lauf den PC selbst geweckt hat (nie im Probelauf)."""
     s = c.settings
     lauf = Lauf(id=jetzt.strftime("%Y-%m-%d_%H%M%S"), start=jetzt.isoformat(timespec="seconds"))
     optionen = optionen or Optionen()
@@ -78,9 +78,10 @@ def run_nightly(
         # nicht erreichbar heißt: den PC in Ruhe lassen.
         if entladen is not None and lauf.ollama_benutzt:
             entladen()
-        if ausschalten is not None and lauf.geweckt:
-            lauf.hinweise.append(ausschalten())
-            protocol.speichern(s.nightly_state_path, lauf)
+    # Nicht im finally: Nach einem Absturz bleibt der PC an, und der Fehler kommt sofort.
+    if ausschalten is not None and lauf.geweckt and not optionen.probelauf:
+        lauf.hinweise.append(ausschalten())
+        protocol.speichern(s.nightly_state_path, lauf)
     return lauf
 
 

@@ -101,7 +101,7 @@ sequenceDiagram
     N->>G: Modelle entladen (keep_alive 0)
     opt PC wurde vom Nachtjob geweckt
         loop jede Minute, bis 15 min Ruhe
-            N->>G: SSH: quser, nvidia-smi; HTTP: /api/ps
+            N->>G: SSH: gesperrt? (LogonUI), nvidia-smi; HTTP: /api/ps
         end
         N->>G: SSH: shutdown /s /t 60
     end
@@ -115,4 +115,4 @@ sequenceDiagram
 
 **Netz:** Ein UDP-Broadcast verlässt das Docker-Bridge-Netz nicht. Auf dem Mini-PC läuft der Nachtjob deshalb mit `network_mode: host` (`compose.minipc.yml`) und erreicht ChromaDB über `127.0.0.1:8000`.
 
-**Ausschalten:** Wake-on-LAN kann nur einschalten. Zum Ausschalten nutzt der Nachtjob den eingebauten OpenSSH-Server von Windows. Ruhe heißt: kein Modell in Ollama geladen (sonst läuft gerade Arbeit), keine Eingabe am PC, GPU ruhig. Details: [gaming-pc-ausschalten.md](gaming-pc-ausschalten.md).
+**Ausschalten:** Wake-on-LAN kann nur einschalten. Zum Ausschalten nutzt der Nachtjob den eingebauten OpenSSH-Server von Windows. Ruhe heißt: kein Modell in Ollama geladen (sonst läuft gerade Arbeit), PC gesperrt (niemand davor), GPU ruhig. Details: [gaming-pc-ausschalten.md](gaming-pc-ausschalten.md).

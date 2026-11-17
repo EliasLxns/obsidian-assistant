@@ -2,18 +2,20 @@
 
 Wake-on-LAN kann den PC nur einschalten. Zum Ausschalten meldet sich der Nachtjob per SSH
 am Gaming-PC an (Windows hat einen OpenSSH-Server eingebaut) und ruft ``shutdown`` auf.
-Das funktioniert gleich, ob der Nachtjob als Container auf dem Gaming-PC selbst läuft
-(``host.docker.internal``) oder später auf dem Mini-PC (IP des Gaming-PCs).
+Das funktioniert vom Mini-PC aus (IP des Gaming-PCs) genauso wie aus einem Container auf dem
+Gaming-PC selbst (``host.docker.internal``).
 
 Regeln, damit nie jemand beim Spielen oder Arbeiten gestört wird:
 
 1. Nur wenn der Nachtjob den PC **selbst geweckt** hat. Lief er schon, bleibt er an.
-2. Erst nach ``ruhe_min`` Minuten am Stück ohne Arbeit: Ollama hat kein Modell geladen
+2. Der PC muss **gesperrt** sein. Nach dem Autologon sperrt ihn eine geplante Aufgabe sofort;
+   ist er entsperrt, sitzt jemand davor. Erkannt am Prozess ``LogonUI.exe``, den Windows
+   nur für Sperr- und Anmeldebildschirm startet.
+3. Erst nach ``ruhe_min`` Minuten am Stück ohne Arbeit: Ollama hat kein Modell geladen
    (sonst läuft gerade eine Anfrage, z. B. aus dem Dashboard), die GPU ist ruhig.
-3. Sobald jemand Maus oder Tastatur benutzt (der Windows-Leerlauf aus ``quser`` springt
-   zurück) oder die GPU ohne Ollama arbeitet (Spiel), wird das Ausschalten
-   **abgebrochen**: Dann sitzt jemand am PC.
-4. ``shutdown /s /t 60``: eine Minute Vorwarnung, abbrechen mit ``shutdown /a``.
+4. Entsperrt, GPU-Last ohne Ollama (Spiel) oder etwas nicht messbar → **abbrechen**,
+   der PC bleibt an. Im Zweifel nie ausschalten.
+5. ``shutdown /s /t 60``: eine Minute Vorwarnung, abbrechen mit ``shutdown /a``.
 """
 
 from __future__ import annotations
@@ -30,15 +32,17 @@ from pathlib import Path
 from typing import Protocol
 
 SHUTDOWN_BEFEHL = 'shutdown /s /t 60 /c "Obsidian-Assistent: Arbeit erledigt, PC geht aus"'
+SPERRE_BEFEHL = 'tasklist /FI "IMAGENAME eq LogonUI.exe" /NH'
+GPU_BEFEHL = "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits"
 
 
 class PCFehler(RuntimeError):
-    """Der Gaming-PC ist per SSH nicht erreichbar oder der Befehl schlug fehl."""
+    """Der Gaming-PC ist per SSH nicht erreichbar oder ein Befehl schlug fehl."""
 
 
 class RemotePC(Protocol):
     def run(self, befehl: str) -> str:
-        """Führt ``befehl`` auf dem Gaming-PC aus und gibt die Ausgabe zurück."""
+        """Führt ``befehl`` auf dem Gaming-PC aus. Fehler (auch Exit-Code ≠ 0) → ``PCFehler``."""
         ...
 
 
@@ -46,32 +50,41 @@ class SshPC:
     """Gaming-PC per SSH mit Schlüssel, ohne Passwort.
 
     Unter Docker Desktop hat ein eingebundener Schlüssel oft die Rechte 0777, dann verweigert
-    ``ssh`` ihn. Deshalb wird er einmal in eine private Kopie mit 0600 geschrieben.
+    ``ssh`` ihn. Deshalb wird er für jeden Befehl in eine private Kopie (0600) geschrieben,
+    die danach sofort wieder gelöscht wird.
     """
 
     def __init__(self, ziel: str, schluessel: Path, known_hosts: Path) -> None:
-        self.ziel = ziel  # z. B. "benutzer@host.docker.internal"
+        self.ziel = ziel  # z. B. "benutzer@<IP-des-Gaming-PCs>"
         self.schluessel = schluessel
         self.known_hosts = known_hosts
-        self._kopie: Path | None = None
-
-    def _schluessel(self) -> Path:
-        if self._kopie is None:
-            if not self.schluessel.is_file():
-                raise PCFehler(f"SSH-Schlüssel nicht gefunden: {self.schluessel}")
-            fd, pfad = tempfile.mkstemp(prefix="nachtjob-ssh-")
-            os.close(fd)
-            shutil.copyfile(self.schluessel, pfad)
-            os.chmod(pfad, 0o600)
-            self._kopie = Path(pfad)
-        return self._kopie
 
     def run(self, befehl: str) -> str:
-        self.known_hosts.parent.mkdir(parents=True, exist_ok=True)
-        args = [
+        try:
+            self.known_hosts.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="nachtjob-ssh-") as tmp:
+                kopie = Path(tmp) / "key"
+                shutil.copyfile(self.schluessel, kopie)
+                os.chmod(kopie, 0o600)
+                r = subprocess.run(
+                    self._args(kopie, befehl),
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+        except (OSError, subprocess.TimeoutExpired) as e:
+            raise PCFehler(f"SSH zu {self.ziel} fehlgeschlagen: {e}") from e
+        if r.returncode != 0:
+            fehler = (r.stderr or r.stdout).strip() or f"Exit-Code {r.returncode}"
+            raise PCFehler(f"`{befehl.split()[0]}` auf {self.ziel} fehlgeschlagen: {fehler}")
+        return r.stdout
+
+    def _args(self, schluessel: Path, befehl: str) -> list[str]:
+        return [
             "ssh",
             "-i",
-            str(self._schluessel()),
+            str(schluessel),
             "-o",
             "BatchMode=yes",
             "-o",
@@ -83,17 +96,10 @@ class SshPC:
             self.ziel,
             befehl,
         ]
-        try:
-            r = subprocess.run(args, capture_output=True, text=True, timeout=60, check=False)
-        except (OSError, subprocess.TimeoutExpired) as e:
-            raise PCFehler(f"SSH zu {self.ziel} fehlgeschlagen: {e}") from e
-        if r.returncode == 255:  # Fehler von ssh selbst, nicht vom Befehl
-            raise PCFehler(f"SSH zu {self.ziel} fehlgeschlagen: {r.stderr.strip()}")
-        return r.stdout
 
 
 class FakePC:
-    """Für Tests: feste Antworten je Befehl, merkt sich alle Befehle."""
+    """Für Tests: feste Antworten je Befehlsanfang, merkt sich alle Befehle."""
 
     def __init__(self, antworten: dict[str, str] | None = None) -> None:
         self.antworten = antworten or {}
@@ -107,34 +113,9 @@ class FakePC:
         return ""
 
 
-_AKTIV = {"active", "aktiv"}
-
-
-def parse_leerlauf(text: str) -> float | None:
-    """``quser``-Leerlauf → Sekunden. ``none``/``.``/``Kein`` = 0, ``5`` = 5 min,
-    ``1:05`` = 1 h 5 min, ``2+03:04`` = 2 Tage 3 h 4 min. Unbekannt → ``None``."""
-    t = text.strip().lower()
-    if t in {"none", ".", "kein", "keine"}:
-        return 0.0
-    m = re.fullmatch(r"(?:(\d+)\+)?(?:(\d+):)?(\d+)", t)
-    if not m:
-        return None
-    tage, stunden, minuten = (int(x) if x else 0 for x in m.groups())
-    return float(((tage * 24 + stunden) * 60 + minuten) * 60)
-
-
-def benutzer_leerlauf_s(quser_ausgabe: str) -> float | None:
-    """Kleinster Leerlauf aller aktiven Sitzungen, ``None`` wenn niemand angemeldet ist."""
-    werte: list[float] = []
-    for zeile in quser_ausgabe.splitlines()[1:]:
-        teile = zeile.lstrip(">").split()
-        for i, teil in enumerate(teile[:-1]):
-            if teil.lower() in _AKTIV:
-                wert = parse_leerlauf(teile[i + 1])
-                if wert is not None:
-                    werte.append(wert)
-                break
-    return min(werte) if werte else None
+def ist_gesperrt(tasklist_ausgabe: str) -> bool:
+    """Läuft ``LogonUI.exe``? Dann zeigt Windows Sperr- oder Anmeldebildschirm."""
+    return "logonui.exe" in tasklist_ausgabe.lower()
 
 
 def gpu_prozent(nvidia_smi_ausgabe: str) -> float | None:
@@ -146,43 +127,32 @@ def gpu_prozent(nvidia_smi_ausgabe: str) -> float | None:
 @dataclass(frozen=True)
 class Messung:
     ollama_aktiv: bool  # Modell geladen = gerade (oder vor kurzem) eine Anfrage
-    leerlauf_s: float | None  # seit wann niemand Maus/Tastatur benutzt hat
-    gpu: float | None  # Prozent
+    gesperrt: bool  # Sperrbildschirm: niemand sitzt davor
+    gpu: float | None  # Prozent, None = nicht messbar
 
 
 def messen(pc: RemotePC, ollama_aktiv: Callable[[], bool]) -> Messung:
-    quser = pc.run("quser")
-    smi = pc.run("nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits")
-    return Messung(ollama_aktiv(), benutzer_leerlauf_s(quser), gpu_prozent(smi))
+    gesperrt = ist_gesperrt(pc.run(SPERRE_BEFEHL))
+    return Messung(ollama_aktiv(), gesperrt, gpu_prozent(pc.run(GPU_BEFEHL)))
 
 
 @dataclass(frozen=True)
 class Regeln:
     ruhe_min: float = 15.0  # so lange am Stück ruhig, dann aus
-    benutzer_aktiv_min: float = 5.0  # Eingabe in den letzten 5 min = jemand sitzt davor
     gpu_max: float = 30.0  # mehr ohne Ollama = vermutlich ein Spiel
     max_warten_min: float = 120.0  # länger nie warten, dann bleibt der PC an
     intervall_s: float = 60.0
 
 
-def bewerten(
-    m: Messung, r: Regeln, vorher_leerlauf_s: float | None = None, beobachtet_s: float = 0.0
-) -> tuple[str, str]:
-    """(``"abbrechen"`` | ``"warten"`` | ``"ruhig"``, Grund).
-
-    Benutzer aktiv heißt: Der Leerlauf ist seit der letzten Messung kleiner geworden (es gab
-    eine Eingabe), oder er bleibt klein, obwohl schon länger beobachtet wird. Direkt nach dem
-    Autologon ist der Leerlauf noch klein, ohne dass jemand da ist; das allein zählt nicht.
-    """
-    if m.leerlauf_s is not None:
-        eingabe = vorher_leerlauf_s is not None and m.leerlauf_s + 30 < vorher_leerlauf_s
-        grenze = r.benutzer_aktiv_min * 60
-        bleibt_klein = m.leerlauf_s < grenze and beobachtet_s > grenze + r.intervall_s
-        if eingabe or bleibt_klein:
-            return "abbrechen", "Jemand benutzt den PC."
+def bewerten(m: Messung, r: Regeln) -> tuple[str, str]:
+    """(``"abbrechen"`` | ``"warten"`` | ``"ruhig"``, Grund)."""
+    if not m.gesperrt:
+        return "abbrechen", "Der PC ist entsperrt, jemand benutzt ihn."
     if m.ollama_aktiv:
         return "warten", "Ollama arbeitet noch."
-    if m.gpu is not None and m.gpu > r.gpu_max:
+    if m.gpu is None:
+        return "abbrechen", "GPU-Last nicht messbar, sicherheitshalber bleibt der PC an."
+    if m.gpu > r.gpu_max:
         return "abbrechen", f"GPU bei {m.gpu:.0f} % ohne Ollama, vermutlich ein Spiel."
     return "ruhig", "Alles ruhig."
 
@@ -202,14 +172,12 @@ def ausschalten_wenn_ruhig(
     r = regeln or Regeln()
     start = clock()
     ruhig_seit: float | None = None
-    vorher: float | None = None
     while clock() - start <= r.max_warten_min * 60:
         try:
             m = messen(pc, ollama_aktiv)
         except PCFehler as e:
             return f"Nicht ausgeschaltet: {e}"
-        lage, grund = bewerten(m, r, vorher, clock() - start)
-        vorher = m.leerlauf_s
+        lage, grund = bewerten(m, r)
         if lage == "abbrechen":
             return f"Nicht ausgeschaltet: {grund}"
         if lage == "warten":

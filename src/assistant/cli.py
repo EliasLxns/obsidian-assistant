@@ -293,10 +293,9 @@ def _cmd_ausschalten(s: Settings, pruefen: bool) -> int:
         except PCFehler as e:
             print(f"Fehler: {e}", file=sys.stderr)
             return 2
-        leerlauf = "niemand angemeldet" if m.leerlauf_s is None else f"{m.leerlauf_s / 60:.0f} min"
         gpu = "unbekannt" if m.gpu is None else f"{m.gpu:.0f} %"
         print(f"Ollama beschäftigt: {'ja' if m.ollama_aktiv else 'nein'}")
-        print(f"Keine Eingabe seit: {leerlauf}")
+        print(f"PC gesperrt: {'ja' if m.gesperrt else 'nein'}")
         print(f"GPU: {gpu}")
         print(f"Bewertung: {bewerten(m, _regeln(s))[1]}")
         return 0
