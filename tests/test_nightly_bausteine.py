@@ -232,6 +232,18 @@ def test_notiz_ergaenzen_behaelt_frontmatter() -> None:
     assert notiz_ergaenzen(neu, ["garten"], ["[[Hochbeet anlegen]]"]) == neu
 
 
+def test_frontmatter_bleibt_zeichengenau() -> None:
+    text = "---\nerstellt: 2026-11-15 10:30  # am Handy\ntags:\n  - idee\nquelle: 'x'\n---\n# T\n"
+    neu = notiz_ergaenzen(text, ["garten"], [])
+    assert neu == text.replace("tags:\n  - idee\n", "tags: [idee, garten]\n")
+
+
+def test_ungueltiges_frontmatter_bleibt_unangetastet() -> None:
+    text = "---\nerstellt: {{date}}\nquelle: a: b\n---\n# T\n"
+    neu = notiz_ergaenzen(text, ["garten"], ["[[A]]"])
+    assert neu == text + "\n## Verwandt\n\n- [[A]]\n"
+
+
 def test_notiz_ohne_frontmatter_bekommt_eins() -> None:
     neu = notiz_ergaenzen("# Idee\n\nText\n", ["garten"], [])
     assert neu.startswith("---\ntags: [garten]\n---\n# Idee")

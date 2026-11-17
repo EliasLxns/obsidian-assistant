@@ -23,8 +23,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
-import yaml
-
 from assistant.index.store import Hit
 from assistant.ingest.parser import Note, frontmatter_tags, iter_notes, split_frontmatter
 from assistant.llm.client import LLM
@@ -68,10 +66,12 @@ def ist_frage(note: Note) -> bool:
     return note.title.lower().startswith("frage:") or "frage" in {t.lower() for t in note.tags}
 
 
-def zielordner(vault: Path, inbox_dir: str, beispiele: int = 4) -> dict[str, list[str]]:
+def zielordner(
+    vault: Path, inbox_dir: str, beispiele: int = 4, dateien: Sequence[Path] | None = None
+) -> dict[str, list[str]]:
     """Ordner mit Notizen außerhalb der Inbox → einige Notiztitel als Beispiel fürs Modell."""
     ordner: dict[str, list[str]] = {}
-    for datei in iter_notes(vault):
+    for datei in iter_notes(vault) if dateien is None else dateien:
         rel = datei.relative_to(vault)
         if len(rel.parts) < 2 or rel.parts[0] == inbox_dir:
             continue
@@ -81,9 +81,9 @@ def zielordner(vault: Path, inbox_dir: str, beispiele: int = 4) -> dict[str, lis
     return dict(sorted(ordner.items()))
 
 
-def wikilink_namen(vault: Path) -> Counter[str]:
+def wikilink_namen(vault: Path, dateien: Sequence[Path] | None = None) -> Counter[str]:
     """Wie oft jeder Notizname vorkommt. Eindeutige Namen reichen als Wikilink."""
-    return Counter(p.stem for p in iter_notes(vault))
+    return Counter(p.stem for p in (iter_notes(vault) if dateien is None else dateien))
 
 
 def wikilink(pfad: str, namen: Counter[str]) -> str:
@@ -178,17 +178,40 @@ def entscheiden(
     return parse_entscheidung(roh, list(ordner))
 
 
+def _tags_zeile_ersetzen(kopf: str, tags: Sequence[str]) -> str:
+    """Ersetzt nur den ``tags:``-Eintrag im rohen Frontmatter, alle anderen Zeilen bleiben
+    Zeichen für Zeichen gleich (Kommentare, Datumsformate, Anführungszeichen)."""
+    zeilen = kopf.split("\n")
+    neu_zeile = f"tags: [{', '.join(tags)}]"
+    for i, zeile in enumerate(zeilen):
+        if re.match(r"^tags?\s*:", zeile):
+            ende = i + 1
+            # Block-Liste darunter (``- a``) gehört mit dazu
+            while ende < len(zeilen) and re.match(r"^\s*-\s", zeilen[ende]):
+                ende += 1
+            return "\n".join([*zeilen[:i], neu_zeile, *zeilen[ende:]])
+    return "\n".join([*zeilen, neu_zeile]) if kopf else neu_zeile
+
+
 def notiz_ergaenzen(text: str, tags: Sequence[str], links: Sequence[str]) -> str:
-    """Tags ins Frontmatter, Links unter ``## Verwandt``. Bestehendes bleibt erhalten."""
+    """Tags ins Frontmatter, Links unter ``## Verwandt``. Bestehendes bleibt erhalten.
+
+    Ist das Frontmatter kein gültiges YAML, bleibt es unangetastet und es kommen keine Tags
+    dazu: Lieber ohne Tags einsortieren als Eigenschaften der Notiz zerstören.
+    """
+    text = text.replace("\r\n", "\n")
     frontmatter, body = split_frontmatter(text)
-    vorhanden = frontmatter_tags(frontmatter)
-    alle_tags = list(dict.fromkeys([*vorhanden, *tags]))
-    if alle_tags:
-        frontmatter["tags"] = alle_tags
+    kopf_roh = text[: len(text) - len(body)]  # "---\n…\n---\n" oder ""
     neue_links = [link for link in links if link not in body]
     if neue_links:
         body = body.rstrip("\n") + "\n\n## Verwandt\n\n" + "".join(f"- {x}\n" for x in neue_links)
-    if not frontmatter:
-        return body
-    kopf = yaml.safe_dump(frontmatter, allow_unicode=True, sort_keys=False, default_flow_style=None)
-    return f"---\n{kopf}---\n{body}"
+
+    vorhanden = frontmatter_tags(frontmatter)
+    alle_tags = list(dict.fromkeys([*vorhanden, *tags]))
+    ungueltig = bool(kopf_roh) and not frontmatter and kopf_roh.strip() != "---\n---".strip()
+    if ungueltig or alle_tags == vorhanden:
+        return kopf_roh + body
+    if not kopf_roh:
+        return f"---\n{_tags_zeile_ersetzen('', alle_tags)}\n---\n{body}"
+    innen = re.sub(r"\n?---\n?$", "", kopf_roh[4:])
+    return f"---\n{_tags_zeile_ersetzen(innen, alle_tags)}\n---\n{body}"

@@ -256,6 +256,8 @@ def _entladen(url: str, modelle: list[str]) -> None:
 
 def _nacht_dienst(c: Components, vault: Path, args: argparse.Namespace) -> int:
     s = c.settings
+    # Im Dienst gelten Zeitfenster und Pause immer, auch wenn beim Start --jetzt stand.
+    args = argparse.Namespace(**{**vars(args), "jetzt": False})
     start = parse_uhrzeit(s.nightly_time)
     startzeit = datetime.now().replace(hour=start.hour, minute=start.minute)
     if not im_fenster(startzeit, parse_fenster(s.nightly_window)):
@@ -301,15 +303,20 @@ def _cmd_nightly(args: argparse.Namespace, c: Components) -> int:
 
 
 def _rueckgaengig(vault: Path, state: Path, lauf_id: str | None) -> int:
-    dateien = alle_laeufe(state)
+    lauf: protocol.Lauf | None = None
     if lauf_id:
-        dateien = [d for d in dateien if d.stem == lauf_id]
+        datei = next((d for d in alle_laeufe(state) if d.stem == lauf_id), None)
+        lauf = protocol.laden(datei) if datei else None
     else:
-        dateien = [d for d in dateien if not protocol.laden(d).probelauf]
-    if not dateien:
+        # Neuester echter Lauf, der etwas geändert hat (leere oder abgebrochene zählen nicht)
+        for datei in reversed(alle_laeufe(state)):
+            kandidat = protocol.laden(datei)
+            if not kandidat.probelauf and any(a.art != "fehler" for a in kandidat.aktionen):
+                lauf = kandidat
+                break
+    if lauf is None:
         print("Keinen passenden Lauf gefunden (`assistant nightly laeufe`).", file=sys.stderr)
         return 1
-    lauf = protocol.laden(dateien[-1])
     if lauf.probelauf:
         print(f"Lauf {lauf.id} war ein Probelauf, es gibt nichts zurückzunehmen.")
         return 0

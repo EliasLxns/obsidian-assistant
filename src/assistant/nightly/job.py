@@ -22,7 +22,7 @@ from pathlib import Path
 from assistant.components import Components
 from assistant.index.embedder import OllamaError
 from assistant.ingest.indexer import index_vault
-from assistant.ingest.parser import Note, parse_markdown
+from assistant.ingest.parser import Note, iter_notes, parse_markdown
 from assistant.nightly import inbox, protocol, questions
 from assistant.nightly.inbox import PROTOKOLL, PRUEFEN
 from assistant.nightly.protocol import Aktion, Lauf, schreiben, text_hash
@@ -71,7 +71,9 @@ def run_nightly(
     finally:
         lauf.ende = datetime.now().isoformat(timespec="seconds")
         protocol.speichern(s.nightly_state_path, lauf)
-        if entladen is not None:
+        # Nur aufräumen, wenn der Nachtjob Ollama auch benutzt hat. Übersprungen oder
+        # nicht erreichbar heißt: den PC in Ruhe lassen.
+        if entladen is not None and lauf.ollama_benutzt:
             entladen()
     return lauf
 
@@ -91,6 +93,17 @@ def _ablauf(
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault nicht gefunden: {vault}")
 
+    # 0. Gibt es überhaupt etwas zu tun? Sonst wird der PC gar nicht erst geweckt.
+    offen = [
+        d
+        for d in inbox.inbox_notes(vault, s.inbox_dir, jetzt, optionen.min_alter)
+        if not _schon_erledigt(d)
+    ]
+    if not offen:
+        lauf.pc = "nicht gebraucht"
+        lauf.hinweise.append("Nichts zu tun: keine neuen Notizen in der Inbox.")
+        return
+
     # 1. Gaming-PC
     pc = wake_and_wait(is_awake, waker, timeout_s=wol_timeout_s, sleep=sleep)
     if pc.war_wach:
@@ -104,6 +117,7 @@ def _ablauf(
         lauf.pc = "nicht erreichbar" if waker else "nicht erreichbar, keine MAC konfiguriert"
         lauf.hinweise.append("Abgebrochen: Ollama antwortet nicht. Nächster Versuch morgen.")
         return
+    lauf.ollama_benutzt = True
 
     # 2. Sicherung
     git = VaultGit(vault) if optionen.git and not optionen.probelauf else None
@@ -117,34 +131,44 @@ def _ablauf(
             return
 
     # 3. Index
-    index_vault(vault, c.embedder, c.store)
+    try:
+        index_vault(vault, c.embedder, c.store)
+    except OllamaError:
+        lauf.hinweise.append("Abgebrochen: Ollama ist beim Index-Abgleich ausgefallen.")
+        return
+    except Exception as e:  # z. B. Chroma kurz weg: mit dem alten Index weitermachen
+        lauf.hinweise.append(f"Index-Abgleich fehlgeschlagen, alter Index wird genutzt ({e}).")
     retriever = Retriever(c.embedder, c.store)
-    ordner = inbox.zielordner(vault, s.inbox_dir)
-    namen = inbox.wikilink_namen(vault)
+    alle = iter_notes(vault)
+    ordner = inbox.zielordner(vault, s.inbox_dir, dateien=alle)
+    namen = inbox.wikilink_namen(vault, dateien=alle)
 
-    # 4. Inbox
-    for datei in inbox.inbox_notes(vault, s.inbox_dir, jetzt, optionen.min_alter):
+    # 4. Inbox. Ein Fehler bei einer Notiz stoppt nicht den ganzen Lauf.
+    for datei in offen:
         rel = datei.relative_to(vault).as_posix()
-        text = datei.read_text(encoding="utf-8")
-        note = parse_markdown(text, rel)
         try:
+            text = datei.read_text(encoding="utf-8")
+            note = parse_markdown(text, rel)
             if inbox.ist_frage(note):
                 ergebnis = _frage(note, text, rel, retriever, c, namen, jetzt, s.inbox_dir)
             else:
                 ergebnis = _sortieren(note, text, rel, vault, retriever, c, ordner, namen, optionen)
+            if ergebnis is None:
+                continue
+            aktion, neu = ergebnis
+            aktion.neu_hash = text_hash(neu)
+            if not optionen.probelauf:
+                ziel = vault / aktion.ziel
+                schreiben(ziel, neu)  # erst schreiben, dann das Original löschen
+                if ziel != datei:
+                    datei.unlink()
         except OllamaError as e:
             lauf.aktionen.append(Aktion("fehler", rel, details=str(e)))
             lauf.hinweise.append("Abgebrochen: Ollama ist während des Laufs ausgefallen.")
             break
-        if ergebnis is None:
+        except Exception as e:
+            lauf.aktionen.append(Aktion("fehler", rel, details=f"{type(e).__name__}: {e}"))
             continue
-        aktion, neu = ergebnis
-        aktion.neu_hash = text_hash(neu)
-        if not optionen.probelauf:
-            ziel = vault / aktion.ziel
-            schreiben(ziel, neu)  # erst schreiben, dann das Original löschen
-            if ziel != datei:
-                datei.unlink()
         lauf.aktionen.append(aktion)
 
     # 5. Protokoll und zweiter Commit
@@ -158,6 +182,14 @@ def _ablauf(
             lauf.git_nachher = git.commit(f"Nachtjob: Lauf {lauf.id}")
         except GitError as e:
             lauf.hinweise.append(f"Git-Commit nach dem Lauf fehlgeschlagen ({e}).")
+
+
+def _schon_erledigt(datei: Path) -> bool:
+    """Beantwortete Frage-Notizen bleiben in der Inbox, brauchen aber keinen Lauf mehr."""
+    try:
+        return questions.schon_beantwortet(datei.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return False  # der Lauf meldet den Fehler dann im Protokoll
 
 
 def _frage(

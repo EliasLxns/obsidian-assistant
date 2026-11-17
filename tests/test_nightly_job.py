@@ -157,13 +157,64 @@ def test_ollama_nicht_erreichbar(vault: Path, tmp_path: Path) -> None:
     assert lauf.pc == "nicht erreichbar"
     assert any(h.startswith("Abgebrochen") for h in lauf.hinweise)
     assert (vault / IDEE).exists() and not (vault / ".git").exists()
-    assert entladen == [True]  # auch nach einem Abbruch wird aufgeräumt
+    assert entladen == []  # Ollama nicht benutzt: PC in Ruhe lassen
 
 
 def test_gaming_schutz_wenn_pc_schon_wach(vault: Path, tmp_path: Path) -> None:
-    lauf = _lauf(_components(vault, tmp_path / "state"), vault, schon_wach_ueberspringen=True)
+    entladen: list[bool] = []
+    lauf = run_nightly(
+        _components(vault, tmp_path / "state"),
+        vault,
+        jetzt=JETZT,
+        is_awake=lambda: True,
+        waker=None,
+        optionen=Optionen(min_alter=timedelta(0), schon_wach_ueberspringen=True),
+        entladen=lambda: entladen.append(True),
+    )
     assert lauf.aktionen == []
     assert "vielleicht wird gespielt" in lauf.hinweise[0]
+    assert entladen == []  # auch die Modelle bleiben, wie sie sind
+
+
+def test_leere_inbox_weckt_den_pc_nicht(vault: Path, tmp_path: Path) -> None:
+    (vault / IDEE).unlink()
+    (vault / FRAGE).write_text("# Frage: x\n\n## Antwort des Assistenten\n", encoding="utf-8")
+    waker = FakeWaker()
+    lauf = run_nightly(
+        _components(vault, tmp_path / "state"),
+        vault,
+        jetzt=JETZT,
+        is_awake=lambda: False,
+        waker=waker,
+        optionen=Optionen(min_alter=timedelta(0)),
+    )
+    assert waker.gesendet == 0
+    assert lauf.pc == "nicht gebraucht"
+
+
+def test_kaputte_notiz_stoppt_den_lauf_nicht(vault: Path, tmp_path: Path) -> None:
+    (vault / "00 Inbox/Latin1.md").write_bytes("# Grüße\n".encode("latin-1"))
+    lauf = _lauf(_components(vault, tmp_path / "state"), vault)
+    arten = {a.quelle: a.art for a in lauf.aktionen}
+    assert arten["00 Inbox/Latin1.md"] == "fehler"
+    assert arten[IDEE] == "einsortiert"
+    assert (vault / "00 Inbox/Protokoll" / f"Nachtjob {lauf.id}.md").exists()
+
+
+def test_rueckgaengig_ueberspringt_leere_laeufe(vault: Path, tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    _lauf(_components(vault, state), vault)
+    zweiter = run_nightly(  # nächste Nacht: nichts zu tun
+        _components(vault, state),
+        vault,
+        jetzt=JETZT + timedelta(days=1),
+        is_awake=lambda: True,
+        waker=None,
+        optionen=Optionen(min_alter=timedelta(0)),
+    )
+    assert zweiter.aktionen == []
+    assert main(["nightly", "rueckgaengig"], FakeApp(vault, state)) == 0
+    assert (vault / IDEE).exists()
 
 
 class FakeApp:
