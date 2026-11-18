@@ -26,6 +26,20 @@ class Settings:
     chroma_host: str = ""  # leer: lokale Chroma-Datei unter chroma_path, sonst HTTP (Docker)
     chroma_port: int = 8000
     watch_polling: bool = False  # Watcher fragt ab statt inotify (Docker Desktop unter Windows)
+    # Nachtjob (Phase 3)
+    inbox_dir: str = "00 Inbox"
+    nightly_time: str = "03:00"  # Startzeit im Dienstbetrieb
+    nightly_window: str = "01:00-06:00"  # außerhalb läuft der Nachtjob nur mit --jetzt
+    nightly_state_path: Path = Path(".nachtjob")  # Läufe für Rückgängig, Pause-Schalter
+    nightly_skip_if_awake: bool = False  # Gaming-Schutz: nicht laufen, wenn der PC schon wach war
+    gaming_pc_mac: str = ""  # leer: kein Wake-on-LAN
+    wol_broadcast: str = "255.255.255.255"
+    wol_wait_s: float = 180.0
+    # Ausschalten per SSH nach getaner Arbeit (nur wenn der Nachtjob geweckt hat)
+    gaming_pc_ssh: str = ""  # leer: nie ausschalten; sonst z. B. benutzer@host.docker.internal
+    gaming_pc_ssh_key: Path = Path("secrets/gaming_pc_ed25519")
+    shutdown_ruhe_min: float = 15.0
+    shutdown_max_warten_min: float = 120.0
 
 
 def read_env_file(path: Path) -> dict[str, str]:
@@ -40,6 +54,10 @@ def read_env_file(path: Path) -> dict[str, str]:
         schluessel, wert = zeile.split("=", 1)
         werte[schluessel.strip()] = wert.strip().strip("\"'")
     return werte
+
+
+def _ja(wert: str) -> bool:
+    return wert.strip().lower() in {"1", "true", "ja", "yes"}
 
 
 def load_settings(
@@ -63,5 +81,19 @@ def load_settings(
         timeout_s=float(get("OLLAMA_TIMEOUT", str(d.timeout_s))),
         chroma_host=get("CHROMA_HOST", d.chroma_host),
         chroma_port=int(get("CHROMA_PORT", str(d.chroma_port))),
-        watch_polling=get("WATCH_POLLING", "").lower() in {"1", "true", "ja", "yes"},
+        watch_polling=_ja(get("WATCH_POLLING", "")),
+        inbox_dir=get("INBOX_DIR", d.inbox_dir),
+        nightly_time=get("NIGHTLY_TIME", d.nightly_time),
+        nightly_window=get("NIGHTLY_WINDOW", d.nightly_window),
+        nightly_state_path=Path(get("NIGHTLY_STATE_PATH", str(d.nightly_state_path))),
+        nightly_skip_if_awake=_ja(get("NIGHTLY_SKIP_IF_AWAKE", "")),
+        gaming_pc_mac=get("GAMING_PC_MAC", d.gaming_pc_mac),
+        wol_broadcast=get("WOL_BROADCAST", d.wol_broadcast),
+        wol_wait_s=float(get("WOL_WAIT_S", str(d.wol_wait_s))),
+        gaming_pc_ssh=get("GAMING_PC_SSH", d.gaming_pc_ssh),
+        gaming_pc_ssh_key=Path(get("GAMING_PC_SSH_KEY", str(d.gaming_pc_ssh_key))),
+        shutdown_ruhe_min=float(get("SHUTDOWN_RUHE_MIN", str(d.shutdown_ruhe_min))),
+        shutdown_max_warten_min=float(
+            get("SHUTDOWN_MAX_WARTEN_MIN", str(d.shutdown_max_warten_min))
+        ),
     )

@@ -10,6 +10,9 @@
 #   chroma   Vektor-DB, nur im internen Netz erreichbar
 #   indexer  indexiert beim Start komplett, danach nur geänderte Notizen (watchdog)
 #   api      FastAPI auf Port 8080: /ask, /search, /status, /reindex, Doku unter /docs
+#   nachtjob sortiert nachts die Inbox und beantwortet „Frage:“-Notizen. Startet nur mit
+#            `docker compose --profile nachtjob up -d`, weil er in den Vault schreibt.
+#            Auf dem Mini-PC zusätzlich `-f compose.minipc.yml` (Wake-on-LAN braucht das Host-Netz).
 
 x-assistant: &assistant
   build: .
@@ -64,6 +67,26 @@ services:
       timeout: 5s
       retries: 3
 
+  nachtjob:
+    <<: *assistant
+    profiles: ["nachtjob"]
+    command: ["assistant", "nightly", "dienst"]
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11434}
+      VAULT_PATH: /vault
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      EMBED_CACHE_PATH: /cache/embeddings.sqlite3
+      NIGHTLY_STATE_PATH: /state
+      GAMING_PC_SSH_KEY: /secrets/gaming_pc_ed25519
+      TZ: ${TZ:-Europe/Berlin}  # Zeitfenster und Startzeit gelten in Ortszeit
+    volumes:
+      - ${VAULT_HOST_PATH:-./demo_vault}:/vault  # schreibend: nur 00 Inbox und Zielordner
+      - cache:/cache
+      - nachtjob:/state  # Läufe für Rückgängig, Pause-Schalter
+      - ./secrets:/secrets:ro  # SSH-Schlüssel zum Ausschalten des Gaming-PCs (nie committen)
+
 volumes:
   chroma:
   cache:
+  nachtjob:

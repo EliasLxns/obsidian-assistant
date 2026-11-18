@@ -93,12 +93,7 @@ class VaultEventHandler(FileSystemEventHandler):
             self.batcher.add(pfad)
 
     def on_any_event(self, event: FileSystemEvent) -> None:
-        if event.is_directory or event.event_type not in {
-            "created",
-            "modified",
-            "deleted",
-            "moved",
-        }:
+        if event.is_directory or event.event_type not in _RELEVANT:
             return
         self._melden(event.src_path)
         if isinstance(event, FileSystemMovedEvent):
