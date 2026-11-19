@@ -1,0 +1,108 @@
+# Aussehen des Dashboards: Design-Richtung „Graphit & Moos“ (siehe Projekthandbuch, Abschnitt Design).
+# Bewusst nur Theme-Optionen, keine CSS-Hacks oder Drittkomponenten.
+# Hell und dunkel sind beide definiert, umschalten im Menü oben rechts (Einstellungen).
+
+[browser]
+gatherUsageStats = false  # keine Nutzungsdaten an Streamlit: nichts verlässt das Heimnetz
+
+[server]
+enableStaticServing = true  # Schriften aus static/fonts, ohne Google Fonts
+headless = true
+
+[client]
+toolbarMode = "minimal"
+
+# Schriften (SIL Open Font License, Lizenztexte in static/fonts).
+# „SourceSerif4“ ohne Leerzeichen: Ein Familienname mit „4“ am Wortende wäre in @font-face
+# ohne Anführungszeichen ungültiges CSS, die Schrift würde still nicht geladen.
+[[theme.fontFaces]]
+family = "Atkinson Hyperlegible Next"
+url = "app/static/fonts/atkinson-hyperlegible-next-latin-400-normal.woff2"
+weight = 400
+
+[[theme.fontFaces]]
+family = "Atkinson Hyperlegible Next"
+url = "app/static/fonts/atkinson-hyperlegible-next-latin-600-normal.woff2"
+weight = 600
+
+[[theme.fontFaces]]
+family = "Atkinson Hyperlegible Next"
+url = "app/static/fonts/atkinson-hyperlegible-next-latin-700-normal.woff2"
+weight = 700
+
+[[theme.fontFaces]]
+family = "SourceSerif4"
+url = "app/static/fonts/source-serif-4-latin-400-normal.woff2"
+weight = 400
+
+[[theme.fontFaces]]
+family = "SourceSerif4"
+url = "app/static/fonts/source-serif-4-latin-400-italic.woff2"
+weight = 400
+style = "italic"
+
+[[theme.fontFaces]]
+family = "SourceSerif4"
+url = "app/static/fonts/source-serif-4-latin-600-normal.woff2"
+weight = 600
+
+[theme]
+# UI in Atkinson Hyperlegible Next, Überschriften in Source Serif 4, Pfade in Monospace
+font = "'Atkinson Hyperlegible Next', system-ui, sans-serif"
+headingFont = "SourceSerif4, Georgia, serif"
+codeFont = "ui-monospace, Consolas, monospace"
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+headingFontSizes = ["2rem", "1.6rem", "1.15rem", "1rem", "0.95rem", "0.9rem"]
+baseFontSize = 15
+codeFontSize = "0.8rem"
+metricValueFontSize = "1.6rem"
+metricValueFontWeight = 600
+baseRadius = "6px"
+buttonRadius = "6px"
+showWidgetBorder = true
+linkUnderline = false
+paddingTop = "1.5rem"
+
+[theme.light]
+backgroundColor = "#F5F6F3"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#22282B"
+borderColor = "#DDE1DC"
+primaryColor = "#3F6E4E"     # Moos, weiße Schrift darauf hat 5,9:1
+linkColor = "#3F6E4E"
+codeBackgroundColor = "#E6EEE8"
+codeTextColor = "#22282B"
+greenColor = "#3F6E4E"
+greenTextColor = "#2F5A3D"
+greenBackgroundColor = "#E6EEE8"
+orangeColor = "#C98A1B"      # Bernstein: nur für „Prüfen“ und Pausen
+orangeTextColor = "#7A4F00"
+orangeBackgroundColor = "#F7EBD3"
+grayColor = "#5F676C"
+grayTextColor = "#5F676C"
+grayBackgroundColor = "#ECEEEA"
+dataframeHeaderBackgroundColor = "#ECEEEA"
+dataframeBorderColor = "#DDE1DC"
+chartCategoricalColors = ["#3F6E4E", "#C98A1B", "#5F676C", "#7FA88B", "#22282B", "#A9B3AE"]
+
+[theme.dark]
+backgroundColor = "#16191B"
+secondaryBackgroundColor = "#1E2225"
+textColor = "#E4E7E5"
+borderColor = "#30363A"
+primaryColor = "#467F59"     # dunkleres Moos, damit weiße Knopfschrift lesbar bleibt
+linkColor = "#8FBF9E"
+codeBackgroundColor = "#243029"
+codeTextColor = "#E4E7E5"
+greenColor = "#7FB08F"
+greenTextColor = "#9CC7A9"
+greenBackgroundColor = "#243029"
+orangeColor = "#E0A84A"
+orangeTextColor = "#E8B866"
+orangeBackgroundColor = "#33291A"
+grayColor = "#9AA2A6"
+grayTextColor = "#9AA2A6"
+grayBackgroundColor = "#262B2E"
+dataframeHeaderBackgroundColor = "#1E2225"
+dataframeBorderColor = "#30363A"
+chartCategoricalColors = ["#7FB08F", "#E0A84A", "#9AA2A6", "#4F8A62", "#E4E7E5", "#5B6468"]

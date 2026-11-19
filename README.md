@@ -2,7 +2,7 @@
 
 Ein lokaler RAG-Assistent für einen Obsidian-Vault. Er beantwortet Fragen an die eigenen Notizen mit Quellen-Links, sortiert nachts neue Notizen aus der Inbox ein und beantwortet „Frage:“-Notizen. Alles läuft zu Hause: keine Cloud-KI, keine Daten außer Haus.
 
-> **Status:** Phase 3 (Nachtjob). CLI `index`, `ask`, `eval` aus Phase 1, REST-API, Watcher und Docker Compose aus Phase 2, dazu der Nachtjob: Inbox sortieren, „Frage:“-Notizen beantworten, Wake-on-LAN, Gaming-Schutz, Protokoll und Rückgängig. Erster Eval-Lauf mit Ollama: bge-m3 erreicht Treffer@1 95 % und Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
+> **Status:** Phase 4 (Dashboard). CLI `index`, `ask`, `eval` aus Phase 1, REST-API, Watcher und Docker Compose aus Phase 2, der Nachtjob aus Phase 3 (Inbox sortieren, „Frage:“-Notizen beantworten, Wake-on-LAN, Gaming-Schutz, Protokoll und Rückgängig) und jetzt ein Dashboard in Streamlit: Fragen, Inbox, Vault-Statistik, Systemstatus. Erster Eval-Lauf mit Ollama: bge-m3 erreicht Treffer@1 95 % und Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
 
 ## Funktionen (Version 1)
 
@@ -67,6 +67,7 @@ curl localhost:8080/status
 | `chroma` | ChromaDB, nur im internen Compose-Netz erreichbar, Daten im Volume `chroma` |
 | `indexer` | `assistant watch`: beim Start alles indexieren, danach nur geänderte Notizen |
 | `api` | `assistant serve` auf Port 8080 |
+| `dashboard` | Streamlit auf Port 8501, eigenes schlankes Image, spricht nur mit der API |
 
 Der Vault wird nur lesend eingebunden, die Container laufen ohne Root-Rechte. Ollama läuft nicht im Compose, sondern direkt auf dem Gaming-PC.
 
@@ -78,8 +79,28 @@ Der Vault wird nur lesend eingebunden, die Container laufen ohne Root-Rechte. Ol
 | `POST /search` `{"frage": "...", "k": 5}` | Nur Quellen, ohne Chat-Modell |
 | `GET /status` | Anzahl Chunks, Modelle, letzter Indexlauf, ist Ollama erreichbar |
 | `POST /reindex` | Vault abgleichen, nur Geändertes wird eingebettet |
+| `GET /inbox` | Offene Inbox-Notizen, Ordner „Prüfen“, letzte Nachtläufe, nächster Lauf, Pause |
+| `GET /vault` | Vault-Statistik: Notizen, Wörter, Ordner, Tags, tote Links, Notizen ohne Links, zuletzt geändert |
+| `GET` / `PUT` / `DELETE /nachtjob/pause` `{"stunden": 12, "grund": "..."}` | Gaming-Schutz lesen, setzen, aufheben |
 
-Schläft der Gaming-PC, antworten `/ask`, `/search` und `/reindex` mit `503` und einem Hinweis; ein leerer Index ergibt `409`.
+Schläft der Gaming-PC, antworten `/ask`, `/search` und `/reindex` mit `503` und einem Hinweis; ein leerer Index ergibt `409`. `/inbox` und `/vault` lesen den Vault direkt und gehen auch, wenn der Gaming-PC schläft. Die API schreibt nie in den Vault, nur den Pause-Schalter in den Zustandsordner des Nachtjobs.
+
+## Dashboard
+
+![Dashboard: Frage mit Antwort und Quellen als Wikilink-Chips](docs/bilder/dashboard-fragen.png)
+
+Nach `docker compose up -d --build` unter <http://localhost:8501>. Vier Seiten:
+
+- **Fragen:** Frage stellen oder nur suchen. Die Quellen erscheinen als `[[Wikilink]]`-Chips und öffnen die Notiz direkt in Obsidian. Daneben das Ergebnis der letzten Nacht.
+- **Inbox:** was wartet, was zum Prüfen liegt, die letzten Läufe mit allen Aktionen und der Gaming-Schutz: „Heute Nacht in Ruhe lassen“ per Knopf, auch vom Handy.
+- **Vault:** Umfang, Ordner, häufigste Tags, zuletzt geändert, tote Links und Notizen ohne Links.
+- **System:** API, Ollama, Modelle, Index, „Neu einlesen“.
+
+Das Dashboard spricht nur mit der API (`API_URL`) und braucht nur `streamlit` und `httpx`. So lässt es sich später durch ein React- oder Blazor-Frontend ersetzen, ohne am Backend etwas zu ändern. Das Aussehen („Graphit & Moos“, hell und dunkel) steht nur in [`dashboard/.streamlit/config.toml`](dashboard/.streamlit/config.toml), ohne CSS-Hacks. Die Schriften liegen im Repo (SIL Open Font License), Nutzungsstatistiken an Streamlit sind aus: Das Dashboard lädt nichts aus dem Internet.
+
+Ohne Docker: `pip install -e ".[dashboard]"`, API mit `assistant serve` starten, dann `cd dashboard && streamlit run app.py`.
+
+![Dashboard dunkel: Inbox mit Gaming-Schutz und letzten Läufen](docs/bilder/dashboard-inbox-dunkel.png)
 
 ## Nachtjob
 
@@ -129,7 +150,9 @@ Auf dem Mini-PC läuft der Nachtjob im Netz des Hosts, damit das Wake-on-LAN-Pak
 | `retrieval/search.py` | Vektorsuche, beste Notizen; Hybrid-Suche folgt hinter derselben Schnittstelle |
 | `llm/` | Interface `LLM`, `OllamaLLM`, `FakeLLM`, Prompts, Antwort mit nummerierten Quellen |
 | `evaluation.py` | Eval-Set laden, Treffer@k je Fragetyp |
-| `api/app.py` | FastAPI: `/ask`, `/search`, `/status`, `/reindex` |
+| `api/app.py` | FastAPI: `/ask`, `/search`, `/status`, `/reindex`, `/inbox`, `/vault`, `/nachtjob/pause` |
+| `statistik.py` | Vault-Statistik direkt aus den Dateien (Ordner, Tags, tote Links, ohne Links) |
+| `nightly/uebersicht.py` | Inbox und letzte Nachtläufe fürs Dashboard, nur lesend |
 | `components.py` | Baut Embedder, VectorStore und LLM aus der Konfiguration (Chroma lokal oder per HTTP) |
 | `nightly/wol.py` | Magic Packet senden, auf Ollama warten, Paket bei Bedarf wiederholen |
 | `nightly/guard.py` | Gaming-Schutz: Zeitfenster, Pause-Schalter, Startzeit |
@@ -140,8 +163,9 @@ Auf dem Mini-PC läuft der Nachtjob im Netz des Hosts, damit das Wake-on-LAN-Pak
 | `nightly/vault_git.py` | Git-Commit vor und nach dem Lauf |
 | `nightly/job.py` | Ein Nachtlauf von Wecken bis Entladen |
 | `cli.py` | Befehle `index`, `ask`, `eval`, `serve`, `watch` und `nightly` |
+| `dashboard/` | Streamlit-App: `api_client.py` (typisierter Client), `ansicht.py` (Texte, Zeiten, Chips), `seiten/` |
 
-Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), `FakeLLM`, `FakeWaker` und einem simulierten Ollama-Server (`httpx.MockTransport`). Der Nachtjob wird auf einer Kopie des Demo-Vaults mit echtem Git getestet, inklusive Rückgängig. Die API wird mit dem `TestClient` von FastAPI getestet, der Watcher mit einem echten `watchdog`-Observer auf einer Kopie des Demo-Vaults.
+Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), `FakeLLM`, `FakeWaker` und einem simulierten Ollama-Server (`httpx.MockTransport`). Der Nachtjob wird auf einer Kopie des Demo-Vaults mit echtem Git getestet, inklusive Rückgängig. Die API wird mit dem `TestClient` von FastAPI getestet, das Dashboard mit `AppTest` von Streamlit gegen eine echte API mit Fakes, der Watcher mit einem echten `watchdog`-Observer auf einer Kopie des Demo-Vaults.
 
 ## Demo-Vault und Evaluation
 

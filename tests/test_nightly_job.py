@@ -29,8 +29,10 @@ JETZT = datetime(2026, 11, 18, 3, 0)
 def vault(tmp_path: Path) -> Path:
     ziel = tmp_path / "vault"
     shutil.copytree(DEMO_VAULT, ziel)
-    # Inbox-Notizen „von gestern“: frisch ausgecheckte Dateien wären sonst zu neu (min_alter)
-    gestern = (datetime.now() - timedelta(days=1)).timestamp()
+    # Inbox-Notizen „vom Vortag“ des festen Testzeitpunkts: frisch ausgecheckte Dateien wären
+    # sonst zu neu (min_alter). Nicht datetime.now(), sonst schlägt der Test ab dem Tag nach
+    # JETZT fehl.
+    gestern = (JETZT - timedelta(days=1)).timestamp()
     for datei in (ziel / "00 Inbox").glob("*.md"):
         os.utime(datei, (gestern, gestern))
     return ziel
@@ -198,7 +200,10 @@ def test_leere_inbox_weckt_den_pc_nicht(vault: Path, tmp_path: Path) -> None:
 
 
 def test_kaputte_notiz_stoppt_den_lauf_nicht(vault: Path, tmp_path: Path) -> None:
-    (vault / "00 Inbox/Latin1.md").write_bytes("# Grüße\n".encode("latin-1"))
+    kaputt = vault / "00 Inbox/Latin1.md"
+    kaputt.write_bytes("# Grüße\n".encode("latin-1"))
+    gestern = (JETZT - timedelta(days=1)).timestamp()
+    os.utime(kaputt, (gestern, gestern))
     lauf = _lauf(_components(vault, tmp_path / "state"), vault)
     arten = {a.quelle: a.art for a in lauf.aktionen}
     assert arten["00 Inbox/Latin1.md"] == "fehler"

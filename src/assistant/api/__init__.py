@@ -1,4 +1,4 @@
-"""FastAPI-Anwendung: /ask, /search, /status, /reindex."""
+"""FastAPI-Anwendung: /ask, /search, /status, /reindex, /inbox, /vault, /nachtjob/pause."""
 
 from assistant.api.app import create_app
 
