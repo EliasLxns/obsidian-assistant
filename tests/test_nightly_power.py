@@ -1,5 +1,6 @@
 """Gaming-PC nach getaner Arbeit ausschalten: Messen, Bewerten, Warten, SSH."""
 
+import os
 import shutil
 import stat
 import subprocess
@@ -50,6 +51,7 @@ def test_gpu() -> None:
     assert gpu_prozent("nvidia-smi nicht gefunden") is None
 
 
+JETZT = datetime(2026, 11, 18, 3, 0)
 R = Regeln(ruhe_min=15, gpu_max=30, intervall_s=60)
 
 
@@ -215,6 +217,11 @@ def _components(vault: Path, state: Path) -> Components:
 def vault(tmp_path: Path) -> Path:
     ziel = tmp_path / "vault"
     shutil.copytree(DEMO_VAULT, ziel)
+    # Inbox-Notizen älter als der feste Testzeitpunkt, sonst gelten frisch ausgecheckte
+    # Dateien als „aus der Zukunft“ und der Lauf hat nichts zu tun.
+    vorher = (JETZT - timedelta(days=1)).timestamp()
+    for datei in (ziel / "00 Inbox").glob("*.md"):
+        os.utime(datei, (vorher, vorher))
     return ziel
 
 
@@ -235,7 +242,7 @@ def test_nur_ausschalten_wenn_selbst_geweckt(
     lauf = run_nightly(
         _components(vault, tmp_path / "state"),
         vault,
-        jetzt=datetime(2026, 11, 18, 3, 0),
+        jetzt=JETZT,
         is_awake=lambda: next(pruefungen),
         waker=FakeWaker(),
         optionen=Optionen(min_alter=timedelta(0), min_score=0.0, git=False, probelauf=probelauf),
