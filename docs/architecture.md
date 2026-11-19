@@ -13,7 +13,7 @@ flowchart LR
         SYNC[Headless Sync] --> VAULT[(Vault, nur lesend)]
         VAULT --> IDX[Indexer]
         IDX --> CHROMA[(ChromaDB)]
-        API[FastAPI<br/>/ask /search /status /reindex]
+        API[FastAPI<br/>/ask /search /status /reindex<br/>/inbox /vault /nachtjob/pause]
         RET[Retriever<br/>BM25 + Vektor + Links]
         API --> RET --> CHROMA
         NIGHT[Nachtjob] -->|schreibt nur 00 Inbox| VAULT
@@ -116,3 +116,22 @@ sequenceDiagram
 **Netz:** Ein UDP-Broadcast verlässt das Docker-Bridge-Netz nicht. Auf dem Mini-PC läuft der Nachtjob deshalb mit `network_mode: host` (`compose.minipc.yml`) und erreicht ChromaDB über `127.0.0.1:8000`.
 
 **Ausschalten:** Wake-on-LAN kann nur einschalten. Zum Ausschalten nutzt der Nachtjob den eingebauten OpenSSH-Server von Windows. Ruhe heißt: kein Modell in Ollama geladen (sonst läuft gerade Arbeit), PC gesperrt (niemand davor), GPU ruhig. Details: [gaming-pc-ausschalten.md](gaming-pc-ausschalten.md).
+
+## Phase 4: Dashboard
+
+Das Dashboard ist ein eigener Container und kennt nur die API. Alles, was es zeigt, kommt über REST:
+
+```mermaid
+flowchart LR
+    DASH[Dashboard<br/>Streamlit :8501] -->|/ask /search| API
+    DASH -->|/inbox /vault /status| API
+    DASH -->|/nachtjob/pause| API
+    API[FastAPI :8080] -->|liest| VAULT[(Vault, nur lesend)]
+    API -->|liest Läufe,<br/>schreibt nur pause.json| STATE[(Volume nachtjob)]
+    NIGHT[Nachtjob] -->|schreibt Läufe,<br/>liest pause.json| STATE
+```
+
+- **Warum nur über die API?** So bleibt das Frontend austauschbar (React oder Blazor später) und braucht weder Chroma noch Ollama noch Schreibrechte am Vault.
+- **Inbox und Statistik lesen den Vault direkt**, nicht den Index. Sie stimmen deshalb auch, wenn der Gaming-PC schläft und noch nicht alles eingebettet ist.
+- **Pause per Knopf:** Der Gaming-Schutz aus Phase 3 (`assistant nightly pause`) ist jetzt auch im Dashboard. Die API schreibt dafür `pause.json` ins gemeinsame Volume, der Nachtjob liest sie vor jedem Lauf.
+- **Design nur über das Theme:** Farben, Schriften, Radien und Diagrammfarben stehen in `dashboard/.streamlit/config.toml`, hell und dunkel getrennt. Keine eigenen CSS-Regeln, damit Streamlit-Updates nichts zerbrechen.

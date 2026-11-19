@@ -59,7 +59,7 @@ src/assistant/
   nightly/     # Inbox-Sortierer, Fragen-Beantworter, Wake-on-LAN
   api/         # FastAPI
   cli.py       # assistant index | ask | eval
-dashboard/        # Streamlit, später Frontend
+dashboard/        # Streamlit (nur über die API, Theme in .streamlit/config.toml), später Frontend
 obsidian-plugin/  # TypeScript-Plugin
 eval/questions.yaml
 demo_vault/       # fiktive Notizen, drei Themen: Homelab/Docker, Garten, Laufen
@@ -79,6 +79,8 @@ pytest                           # Tests, laufen ohne Ollama
 assistant index demo_vault/      # ab Phase 1
 assistant ask "Welchen Port nutzt Ollama?"
 assistant eval                   # Treffer@1 / Treffer@5 als Tabelle
+assistant serve                  # API auf :8080 (ab Phase 2)
+cd dashboard && streamlit run app.py   # Dashboard auf :8501 (ab Phase 4, braucht die API)
 ```
 
 ## Claude-Code-Hooks
