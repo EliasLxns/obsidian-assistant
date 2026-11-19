@@ -9,7 +9,9 @@
 #
 #   chroma   Vektor-DB, nur im internen Netz erreichbar
 #   indexer  indexiert beim Start komplett, danach nur geänderte Notizen (watchdog)
-#   api      FastAPI auf Port 8080: /ask, /search, /status, /reindex, Doku unter /docs
+#   api      FastAPI auf Port 8080: /ask, /search, /status, /reindex, /inbox, /vault,
+#            /nachtjob/pause, Doku unter /docs
+#   dashboard Streamlit auf Port 8501: Fragen, Inbox, Vault, System (spricht nur mit der API)
 #   nachtjob sortiert nachts die Inbox und beantwortet „Frage:“-Notizen. Startet nur mit
 #            `docker compose --profile nachtjob up -d`, weil er in den Vault schreibt.
 #            Auf dem Mini-PC zusätzlich `-f compose.minipc.yml` (Wake-on-LAN braucht das Host-Netz).
@@ -57,6 +59,18 @@ services:
     command: ["assistant", "serve", "--host", "0.0.0.0", "--port", "8080"]
     ports:
       - "${API_PORT:-8080}:8080"
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11434}
+      VAULT_PATH: /vault
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      EMBED_CACHE_PATH: /cache/embeddings.sqlite3
+      NIGHTLY_STATE_PATH: /state
+      TZ: ${TZ:-Europe/Berlin}  # „nächster Lauf“ und Pausen in Ortszeit
+    volumes:
+      - ${VAULT_HOST_PATH:-./demo_vault}:/vault:ro
+      - cache:/cache
+      - nachtjob:/state  # liest die Läufe, schreibt nur den Pause-Schalter
     healthcheck:
       test:
         - CMD
@@ -66,6 +80,18 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  dashboard:
+    build: ./dashboard
+    image: obsidian-assistant-dashboard:latest
+    environment:
+      API_URL: http://api:8080
+      TZ: ${TZ:-Europe/Berlin}
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    depends_on:
+      - api
+    restart: unless-stopped
 
   nachtjob:
     <<: *assistant

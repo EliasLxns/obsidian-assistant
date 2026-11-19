@@ -1,0 +1,3 @@
+# Das Dashboard braucht nur diese zwei Pakete, nicht den Assistenten selbst.
+streamlit>=1.50,<2
+httpx>=0.27
