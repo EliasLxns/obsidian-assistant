@@ -159,5 +159,6 @@ flowchart LR
 - **Warum BM25?** Vektoren finden Umschreibungen, verfehlen aber manchmal seltene exakte Begriffe (`ITBS`, `11434`). BM25 zählt genau diese Begriffe und gewichtet seltene stärker. Eigene Umsetzung in `retrieval/bm25.py`, mit deutschen Stoppwörtern und grobem Kürzen von Endungen.
 - **Warum RRF?** Kosinus-Werte (0 bis 1) und BM25-Werte (offen nach oben) lassen sich nicht direkt addieren. RRF nutzt nur die Plätze.
 - **Rückfall:** Ist Ollama nicht erreichbar, sucht `hybrid` nur mit BM25 weiter. `/search` meldet das im Feld `modus`. Die Suche geht so auch, wenn der Gaming-PC schläft.
-- **Der BM25-Index** wird aus den Chunks im Store gebaut und nur neu gebaut, wenn sich deren Fingerabdrücke ändern. Für einige tausend Chunks dauert das unter einer Sekunde.
+- **Der BM25-Index** wird aus den Chunks im Store gebaut, im Speicher gehalten und neu gebaut, wenn sich die Anzahl der Chunks ändert oder er älter als eine Minute ist. Eine Suche kostet so nur ein `count()`.
+- **Kein Warten auf den schlafenden PC:** Vor der Vektorsuche prüft die API mit 2 s Timeout, ob Ollama antwortet, und merkt sich das Ergebnis 30 s. `assistant eval` fällt nie still auf BM25 zurück, sondern scheitert sichtbar.
 - **Gemessen:** Treffer@1 95 % → 100 %, Treffer@5 bleibt 100 % (siehe [Eval-Ergebnisse](eval-ergebnisse.md)).
