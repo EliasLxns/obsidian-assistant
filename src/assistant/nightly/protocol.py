@@ -5,8 +5,9 @@ Jeder Lauf wird zweimal festgehalten:
 - als Markdown-Notiz in ``00 Inbox/Protokoll``, lesbar in Obsidian
 - als JSON im Zustandsordner (außerhalb des Vaults) mit dem Originaltext jeder Notiz
 
-Rückgängig stellt jede Notiz am alten Ort wieder her. Wurde eine Notiz seit dem Lauf von Hand
-geändert, bleibt sie, wie sie ist: Eigene Änderungen gehen nie verloren.
+Rückgängig stellt jede Notiz am alten Ort wieder her, Byte für Byte, auch die Zeilenenden.
+Wurde eine Notiz seit dem Lauf von Hand geändert, bleibt sie, wie sie ist: Eigene Änderungen
+gehen nie verloren.
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ class Lauf:
     geweckt: bool = False  # nur dann darf der Nachtjob den PC danach ausschalten
     git_vorher: str | None = None
     git_nachher: str | None = None
+    rueckgaengig: str = ""  # Zeitpunkt, zu dem der Lauf zurückgenommen wurde
     hinweise: list[str] = field(default_factory=list[str])
     aktionen: list[Aktion] = field(default_factory=list[Aktion])
 
@@ -90,7 +92,7 @@ def als_markdown(lauf: Lauf) -> str:
         "",
         f"- Start: {lauf.start}, Ende: {lauf.ende}",
         f"- Gaming-PC: {lauf.pc or 'unbekannt'}",
-        f"- Git vorher: `{(lauf.git_vorher or 'keine Änderung')[:10]}`",
+        f"- Git vorher: {f'`{lauf.git_vorher[:10]}`' if lauf.git_vorher else 'keine Änderung'}",
         f"- Rückgängig: `assistant nightly rueckgaengig {lauf.id}`",
     ]
     zeilen += [f"- {h}" for h in lauf.hinweise]
@@ -105,16 +107,41 @@ def als_markdown(lauf: Lauf) -> str:
     return "\n".join(zeilen) + "\n"
 
 
+def lesen(datei: Path) -> str:
+    """Text ohne Umwandlung der Zeilenenden (``read_text`` macht unter Windows aus CRLF ``\n``)."""
+    return datei.read_bytes().decode("utf-8")
+
+
 def schreiben(datei: Path, text: str) -> None:
-    """Erst in eine Hilfsdatei, dann umbenennen: Nie eine halb geschriebene Notiz."""
+    """Erst in eine Hilfsdatei, dann umbenennen: Nie eine halb geschriebene Notiz.
+
+    ``newline=""``: Die Zeilenenden landen so in der Datei, wie sie im Text stehen. Sonst würde
+    Windows aus LF CRLF machen, und jede Notiz erschiene in Git als komplett geändert.
+    """
     datei.parent.mkdir(parents=True, exist_ok=True)
     tmp = datei.with_name(f".{datei.name}.tmp")
-    tmp.write_text(text, encoding="utf-8")
+    tmp.write_text(text, encoding="utf-8", newline="")
     tmp.replace(datei)
 
 
-def rueckgaengig(vault: Path, lauf: Lauf) -> list[str]:
-    """Stellt die Notizen eines Laufs wieder her. Gibt eine Zeile je Notiz zurück."""
+def wie_original(neu: str, original: str) -> str:
+    """Übernimmt die Zeilenenden des Originals: CRLF nur, wenn das Original durchgehend CRLF
+    hat. Bei gemischten Zeilenenden bleibt der Text, wie er ist."""
+    crlf = original.count("\r\n")
+    if crlf and crlf == original.count("\n"):
+        return neu.replace("\r\n", "\n").replace("\n", "\r\n")
+    if not crlf:
+        return neu.replace("\r\n", "\n")
+    return neu
+
+
+def rueckgaengig(vault: Path, lauf: Lauf, protokoll: Path | None = None) -> list[str]:
+    """Stellt die Notizen eines Laufs wieder her. Gibt eine Zeile je Notiz zurück.
+
+    ``protokoll``: die Protokoll-Notiz des Laufs. Sie wird gelöscht, wenn alles zurückgenommen
+    ist; sonst bekommt sie einen Vermerk, was übersprungen wurde. Wurde gar nichts
+    wiederhergestellt (z. B. ein Lauf mit nur Fehlern), bleibt sie unverändert.
+    """
     meldungen: list[str] = []
     for a in reversed(lauf.aktionen):
         if a.art == "fehler" or not a.ziel:
@@ -123,7 +150,7 @@ def rueckgaengig(vault: Path, lauf: Lauf) -> list[str]:
         if not ziel.is_file():
             meldungen.append(f"Übersprungen: {a.ziel} gibt es nicht mehr.")
             continue
-        if text_hash(ziel.read_text(encoding="utf-8")) != a.neu_hash:
+        if text_hash(lesen(ziel)) != a.neu_hash:
             meldungen.append(f"Übersprungen: {a.ziel} wurde seitdem geändert.")
             continue
         if ziel != quelle and quelle.exists():
@@ -133,4 +160,13 @@ def rueckgaengig(vault: Path, lauf: Lauf) -> list[str]:
         if ziel != quelle:
             ziel.unlink()
         meldungen.append(f"Wiederhergestellt: {a.quelle}")
+    wiederhergestellt = any(m.startswith("Wiederhergestellt") for m in meldungen)
+    if protokoll is not None and protokoll.is_file() and wiederhergestellt:
+        uebersprungen = [m for m in meldungen if m.startswith("Übersprungen")]
+        if uebersprungen:
+            vermerk = "\n## Rückgängig\n\n" + "".join(f"- {m}\n" for m in meldungen)
+            schreiben(protokoll, lesen(protokoll) + vermerk)
+        else:
+            protokoll.unlink()
+            meldungen.append(f"Protokoll entfernt: {protokoll.name}")
     return meldungen

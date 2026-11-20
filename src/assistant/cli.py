@@ -37,6 +37,7 @@ from assistant.nightly.guard import (
     sekunden_bis,
     warum_nicht,
 )
+from assistant.nightly.inbox import PROTOKOLL
 from assistant.nightly.job import Optionen, run_nightly
 from assistant.nightly.power import (
     PCFehler,
@@ -47,6 +48,7 @@ from assistant.nightly.power import (
     messen,
 )
 from assistant.nightly.protocol import alle_laeufe
+from assistant.nightly.vault_git import GitError, VaultGit
 from assistant.nightly.wol import WakeOnLan
 from assistant.retrieval.search import SUCHMODI, Retriever, suchmodus
 
@@ -367,14 +369,14 @@ def _cmd_nightly(args: argparse.Namespace, c: Components) -> int:
                 print(f"{lauf.id}{probe}: PC {lauf.pc}; {zahlen}")
             return 0
         case "rueckgaengig":
-            return _rueckgaengig(vault, state, args.lauf)
+            return _rueckgaengig(vault, state, args.lauf, s.inbox_dir)
         case "ausschalten":
             return _cmd_ausschalten(s, args.pruefen)
         case _:
             return _nachtlauf(c, vault, args)
 
 
-def _rueckgaengig(vault: Path, state: Path, lauf_id: str | None) -> int:
+def _rueckgaengig(vault: Path, state: Path, lauf_id: str | None, inbox_dir: str) -> int:
     lauf: protocol.Lauf | None = None
     if lauf_id:
         datei = next((d for d in alle_laeufe(state) if d.stem == lauf_id), None)
@@ -383,7 +385,8 @@ def _rueckgaengig(vault: Path, state: Path, lauf_id: str | None) -> int:
         # Neuester echter Lauf, der etwas geändert hat (leere oder abgebrochene zählen nicht)
         for datei in reversed(alle_laeufe(state)):
             kandidat = protocol.laden(datei)
-            if not kandidat.probelauf and any(a.art != "fehler" for a in kandidat.aktionen):
+            erledigt = kandidat.probelauf or kandidat.rueckgaengig
+            if not erledigt and any(a.art != "fehler" for a in kandidat.aktionen):
                 lauf = kandidat
                 break
     if lauf is None:
@@ -392,8 +395,24 @@ def _rueckgaengig(vault: Path, state: Path, lauf_id: str | None) -> int:
     if lauf.probelauf:
         print(f"Lauf {lauf.id} war ein Probelauf, es gibt nichts zurückzunehmen.")
         return 0
-    for zeile in protocol.rueckgaengig(vault, lauf):
+    if lauf.rueckgaengig:
+        print(f"Lauf {lauf.id} wurde schon am {lauf.rueckgaengig} rückgängig gemacht.")
+        return 0
+    md = vault / inbox_dir / PROTOKOLL / f"Nachtjob {lauf.id}.md"
+    for zeile in protocol.rueckgaengig(vault, lauf, protokoll=md):
         print(zeile)
+    lauf.rueckgaengig = datetime.now().isoformat(timespec="seconds")
+    protocol.speichern(state, lauf)
+    git = VaultGit(vault)
+    if git.ist_repo():
+        # Nur, was der Lauf angefasst hat: eigene Änderungen im Vault bleiben uncommittet.
+        pfade = {p for a in lauf.aktionen for p in (a.quelle, a.ziel) if p}
+        pfade.add(md.relative_to(vault).as_posix())
+        try:
+            if git.commit(f"Nachtjob: Lauf {lauf.id} rückgängig", sorted(pfade)):
+                print("Git-Commit erstellt.")
+        except GitError as e:
+            print(f"Git-Commit fehlgeschlagen: {e}", file=sys.stderr)
     return 0
 
 

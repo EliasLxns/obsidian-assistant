@@ -14,6 +14,7 @@ from assistant.ingest.parser import Note, split_frontmatter
 from assistant.llm.answer import answer_from_hits
 from assistant.llm.client import LLM
 from assistant.nightly.inbox import MAX_ZEICHEN_IM_PROMPT, wikilink
+from assistant.nightly.protocol import wie_original
 from assistant.retrieval.search import Retriever
 
 ANTWORT_UEBERSCHRIFT = "## Antwort des Assistenten"
@@ -54,11 +55,19 @@ def beantworte(
     antwort = answer_from_hits(frage, treffer[:k], llm)
 
     stempel = f"*{heute:%d.%m.%Y}, {llm.model_name}*"
-    teile = [text.rstrip("\n"), "", ANTWORT_UEBERSCHRIFT, "", stempel, "", antwort.text]
+    teile = [
+        text.replace("\r\n", "\n").rstrip("\n"),
+        "",
+        ANTWORT_UEBERSCHRIFT,
+        "",
+        stempel,
+        "",
+        antwort.text,
+    ]
     if antwort.sources:
         teile += ["", "**Quellen**", ""]
         for nr, h in enumerate(antwort.sources, start=1):
             link = wikilink(h.chunk.path, namen)
             ort = f" – {h.chunk.heading}" if h.chunk.heading else ""
             teile.append(f"{nr}. {link}{ort}")
-    return "\n".join(teile) + "\n", len(antwort.sources)
+    return wie_original("\n".join(teile) + "\n", text), len(antwort.sources)

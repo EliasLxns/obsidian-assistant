@@ -109,7 +109,11 @@ sequenceDiagram
 
 **Warum JSON und eine feste Ordnerliste?** Ein 7–8B-Modell erfindet sonst gern Ordner. Das Modell bekommt die vorhandenen Ordner mit einigen Notiztiteln als Beispiel und muss einen davon wählen; Ollama erzwingt mit `format: "json"` gültiges JSON. Alles, was nicht passt (unbekannter Ordner, „sicher“ nicht `true`, kaputtes JSON), landet in `00 Inbox/Prüfen`.
 
-**Rückgängig ohne Git-Kenntnisse:** Der Lauf speichert pro Notiz Quelle, Ziel, Originaltext und den Hash des geschriebenen Textes (`NIGHTLY_STATE_PATH/laeufe/<id>.json`). Rückgängig schreibt den Originaltext zurück, aber nur, wenn die Notiz noch genau so aussieht, wie der Nachtjob sie hinterlassen hat. Git bleibt zusätzlich als Sicherheitsnetz.
+**Rückgängig ohne Git-Kenntnisse:** Der Lauf speichert pro Notiz Quelle, Ziel, Originaltext und den Hash des geschriebenen Textes (`NIGHTLY_STATE_PATH/laeufe/<id>.json`). Rückgängig schreibt den Originaltext zurück, aber nur, wenn die Notiz noch genau so aussieht, wie der Nachtjob sie hinterlassen hat. Zurück kommt sie Byte für Byte, auch mit ihren Zeilenenden (CRLF aus Windows bleibt CRLF). Danach verschwindet die Protokoll-Notiz, oder sie bekommt einen Vermerk, wenn etwas übersprungen wurde, und ein Git-Commit „… rückgängig“ hält den Stand fest. Git bleibt zusätzlich als Sicherheitsnetz.
+
+**Welche Notizen werden verlinkt?** Nur ähnliche Notizen mit Kosinus ≥ 0,5, die höchstens 0,1 hinter dem besten Treffer liegen. Im Probelauf mit `bge-m3` erreichten selbst fremde Notizen 0,44, passende 0,53 bis 0,71. Die Werte werden mit echten Inbox-Notizen nachjustiert. Damit die Tags einheitlich bleiben, bekommt das Modell die vorhandenen Tags des Vaults und soll sie wiederverwenden, mit Umlauten.
+
+**Antworten nur aus den Quellen:** Der Antwort-Prompt verlangt „du“, keine dazuerfundenen Gründe und eine Quellennummer je Satz. Im Code bleiben danach nur die Quellen stehen, die die Antwort wirklich zitiert, neu durchnummeriert.
 
 **Gaming-Schutz:** Vom Server aus ist nicht sichtbar, ob ein Spiel läuft. Deshalb einfache, nachvollziehbare Regeln: nur im Zeitfenster, Pause-Schalter, Modelle sofort entladen, optional einen schon wachen PC in Ruhe lassen.
 

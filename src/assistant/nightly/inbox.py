@@ -24,7 +24,13 @@ from pathlib import Path
 from typing import Any, cast
 
 from assistant.index.store import Hit
-from assistant.ingest.parser import Note, frontmatter_tags, iter_notes, split_frontmatter
+from assistant.ingest.parser import (
+    Note,
+    frontmatter_tags,
+    iter_notes,
+    parse_markdown,
+    split_frontmatter,
+)
 from assistant.llm.client import LLM
 from assistant.retrieval.search import Retriever
 
@@ -99,18 +105,41 @@ def verwandte_notizen(
     inbox_dir: str,
     *,
     k: int = 3,
-    min_score: float = 0.3,
+    min_score: float = 0.5,
+    max_abstand: float = 0.1,
 ) -> list[Hit]:
-    """Die ``k`` ähnlichsten Notizen außerhalb der Inbox mit Score ≥ ``min_score``.
+    """Die ``k`` ähnlichsten Notizen außerhalb der Inbox.
 
-    ``min_score`` verhindert Links „ins Blaue“, wenn nichts wirklich passt. Der Wert ist ein
-    Startwert für bge-m3 und wird mit echten Inbox-Notizen nachjustiert.
+    Zwei Schwellen verhindern Links „ins Blaue“: Score ≥ ``min_score`` (Kosinus, die Suche
+    muss im Modus ``vektor`` laufen) und höchstens ``max_abstand`` hinter dem besten Treffer.
+    Die Werte stammen aus dem Probelauf mit bge-m3 und werden mit echten Notizen nachjustiert.
     """
     treffer = retriever.search_notes(text[:MAX_ZEICHEN_IM_PROMPT], k * 3)
-    passend = [
-        h for h in treffer if not h.chunk.path.startswith(f"{inbox_dir}/") and h.score >= min_score
-    ]
+    kandidaten = [h for h in treffer if not h.chunk.path.startswith(f"{inbox_dir}/")]
+    if not kandidaten:
+        return []
+    bester = kandidaten[0].score
+    passend = [h for h in kandidaten if h.score >= min_score and bester - h.score <= max_abstand]
     return passend[:k]
+
+
+def vorhandene_tags(
+    vault: Path, inbox_dir: str, dateien: Sequence[Path] | None = None, maximal: int = 60
+) -> list[str]:
+    """Die häufigsten Tags außerhalb der Inbox, damit das Modell sie wiederverwendet."""
+    zaehler: Counter[str] = Counter()
+    for datei in iter_notes(vault) if dateien is None else dateien:
+        rel = datei.relative_to(vault)
+        if rel.parts[0] == inbox_dir:
+            continue
+        try:
+            note = parse_markdown(
+                datei.read_text(encoding="utf-8", errors="replace"), rel.as_posix()
+            )
+        except OSError:
+            continue
+        zaehler.update(t.lower() for t in note.tags)
+    return [t for t, _ in zaehler.most_common(maximal)]
 
 
 SORT_SYSTEM = """Du sortierst neue Notizen in einen Obsidian-Vault ein.
@@ -120,15 +149,23 @@ Antworte nur mit einem JSON-Objekt:
 Regeln:
 - Wähle genau einen Ordner aus der Liste. Erfinde keine Ordner.
 - 1 bis 5 Tags, kleingeschrieben, ohne #, ohne Leerzeichen (Bindestrich statt Leerzeichen).
+- Nimm vorhandene Tags aus der Liste, wenn sie passen. Neue Tags nur, wenn keiner passt.
+- Schreibe Umlaute als ä, ö, ü und ß (also "bewässerung", nicht "bewaesserung").
 - "sicher" nur, wenn die Notiz eindeutig zu dem Ordner passt. Sonst false."""
 
 
 def build_sort_prompt(
-    note: Note, text: str, ordner: dict[str, list[str]], verwandt: Sequence[Hit]
+    note: Note,
+    text: str,
+    ordner: dict[str, list[str]],
+    verwandt: Sequence[Hit],
+    tags: Sequence[str] = (),
 ) -> str:
     zeilen = ["Ordner (mit Beispielnotizen):"]
     for name, beispiele in ordner.items():
         zeilen.append(f"- {name}: {', '.join(beispiele)}")
+    if tags:
+        zeilen += ["", f"Vorhandene Tags: {', '.join(tags)}"]
     if verwandt:
         zeilen += ["", "Ähnliche vorhandene Notizen:"]
         zeilen += [f"- {h.chunk.path}" for h in verwandt]
@@ -170,10 +207,11 @@ def entscheiden(
     ordner: dict[str, list[str]],
     verwandt: Sequence[Hit],
     llm: LLM,
+    tags: Sequence[str] = (),
 ) -> Entscheidung:
     if not ordner:
         return Entscheidung(None, (), False, "Im Vault gibt es noch keine Zielordner")
-    prompt = build_sort_prompt(note, text, ordner, verwandt)
+    prompt = build_sort_prompt(note, text, ordner, verwandt, tags)
     roh = llm.generate(prompt, system=SORT_SYSTEM, json=True)
     return parse_entscheidung(roh, list(ordner))
 
