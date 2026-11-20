@@ -135,3 +135,12 @@ flowchart LR
 - **Inbox und Statistik lesen den Vault direkt**, nicht den Index. Sie stimmen deshalb auch, wenn der Gaming-PC schläft und noch nicht alles eingebettet ist.
 - **Pause per Knopf:** Der Gaming-Schutz aus Phase 3 (`assistant nightly pause`) ist jetzt auch im Dashboard. Die API schreibt dafür `pause.json` ins gemeinsame Volume, der Nachtjob liest sie vor jedem Lauf.
 - **Design nur über das Theme:** Farben, Schriften, Radien und Diagrammfarben stehen in `dashboard/.streamlit/config.toml`, hell und dunkel getrennt. Keine eigenen CSS-Regeln, damit Streamlit-Updates nichts zerbrechen.
+
+## Phase 5: Obsidian-Plugin
+
+Das Plugin ist ein zweites Frontend neben dem Dashboard und nutzt dieselben Endpunkte (`/ask`, `/search`, `/status`).
+
+- **`requestUrl` statt `fetch`:** Obsidian schickt die Anfrage selbst, ohne CORS. Die API braucht dafür keine Änderung, und es geht auch in der mobilen App.
+- **Testbar ohne Obsidian:** Der API-Client bekommt die HTTP-Funktion hineingereicht, Textfunktionen und Einstellungen liegen in eigenen Dateien ohne Obsidian-Import. `vitest` testet sie ohne Obsidian und ohne API.
+- **Ähnliche Notizen** brauchen keinen neuen Endpunkt: Titel und Anfang der aktiven Notiz (ohne Frontmatter, Code und Markdown-Zeichen) gehen als Suchtext an `/search`. `/search` liefert schon je Notiz den besten Abschnitt. Das Plugin holt einen Treffer mehr und lässt die Notiz selbst weg.
+- **Quellen öffnen per `openLinkText`** mit `Pfad#Überschrift`, also wie ein normaler Wikilink: Strg/Cmd-Klick öffnet einen neuen Tab.
