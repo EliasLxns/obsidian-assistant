@@ -7,13 +7,14 @@ from fastapi.testclient import TestClient
 
 from assistant.api import create_app
 from assistant.components import Components
+from assistant.config import SUCHMODI as SUCHMODI_CONFIG
 from assistant.config import Settings, load_settings
 from assistant.index.embedder import FakeEmbedder, OllamaError, Vector
 from assistant.index.store import Hit, InMemoryStore
 from assistant.ingest.chunker import Chunk
 from assistant.llm.client import FakeLLM
 from assistant.retrieval.bm25 import Bm25, stamm, woerter
-from assistant.retrieval.search import Retriever, rrf, suchmodus
+from assistant.retrieval.search import SUCHMODI, Retriever, rrf, suchmodus
 
 
 def _chunk(pfad: str, text: str, nr: int = 0) -> Chunk:
@@ -100,13 +101,53 @@ def test_hybrid_sucht_ohne_ollama_mit_bm25_weiter(demo_store: InMemoryStore) -> 
         Retriever(_OllamaWeg(), demo_store, modus="vektor").search_notes("Eisheilige", 3)
 
 
+class _Zaehler(FakeEmbedder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.anfragen = 0
+
+    def embed_query(self, text: str) -> Vector:
+        self.anfragen += 1
+        return super().embed_query(text)
+
+
+def test_hybrid_fragt_ollama_nicht_wenn_ping_scheitert(demo_store: InMemoryStore) -> None:
+    """Schläft der PC, wartet die Suche nicht auf den Ollama-Timeout."""
+    emb, pings, jetzt = _Zaehler(), list[int](), [0.0]
+    r = Retriever(
+        emb,
+        demo_store,
+        modus="hybrid",
+        erreichbar=lambda: pings.append(1) or False,
+        uhr=lambda: jetzt[0],
+    )
+    assert r.search_notes_mit_modus("Eisheilige", 3)[1] == "bm25"
+    assert r.search_mit_modus("Eisheilige", 3)[1] == "bm25"
+    assert emb.anfragen == 0 and len(pings) == 1  # Ergebnis 30 s gemerkt
+    jetzt[0] = 31.0
+    r.search("Eisheilige", 3)
+    assert len(pings) == 2
+
+
+def test_eval_ohne_rueckfall_scheitert_sichtbar(demo_store: InMemoryStore) -> None:
+    r = Retriever(_OllamaWeg(), demo_store, modus="hybrid", rueckfall=False)
+    with pytest.raises(OllamaError):
+        r.search_notes("Eisheilige", 3)
+
+
 def test_bm25_index_folgt_dem_store(embedder: FakeEmbedder) -> None:
     store = InMemoryStore()
-    r = Retriever(embedder, store, modus="bm25")
+    jetzt = [0.0]
+    r = Retriever(embedder, store, modus="bm25", uhr=lambda: jetzt[0])
     assert r.search("Feuchtesensor", 1) == []
     neu = _chunk("Sensor.md", "Feuchtesensor am Hochbeet")
     store.upsert([neu], [embedder.embed_query(neu.embed_text)], "fake")
-    assert r.search("Feuchtesensor", 1)[0].chunk.path == "Sensor.md"
+    assert r.search("Feuchtesensor", 1)[0].chunk.path == "Sensor.md"  # neue Anzahl
+    geaendert = _chunk("Sensor.md", "Bodenfeuchte am Hochbeet")  # gleiche ID und Anzahl
+    store.upsert([geaendert], [embedder.embed_query(geaendert.embed_text)], "fake")
+    assert r.search("Bodenfeuchte", 1) == []  # noch der alte Index
+    jetzt[0] = 61.0
+    assert r.search("Bodenfeuchte", 1)[0].chunk.path == "Sensor.md"  # nach einer Minute neu
     store.delete([neu.id])
     assert r.search("Feuchtesensor", 1) == []
 
@@ -117,11 +158,14 @@ def test_unbekannter_modus() -> None:
 
 
 def test_suchmodus_aus_env() -> None:
+    assert SUCHMODI_CONFIG == SUCHMODI
+    with pytest.raises(ValueError, match="SEARCH_MODE='vector' ist ungültig"):
+        load_settings(environ={"SEARCH_MODE": "vector"}, env_file=Path("fehlt.env"))
     assert load_settings(environ={"SEARCH_MODE": " Hybrid "}).suchmodus == "hybrid"
     assert load_settings(environ={}, env_file=Path("fehlt.env")).suchmodus == "hybrid"
 
 
-def test_api_search_ohne_ollama(demo_store: InMemoryStore, tmp_path: object) -> None:
+def test_api_search_ohne_ollama(demo_store: InMemoryStore) -> None:
     c = Components(
         settings=Settings(suchmodus="hybrid"),
         embedder=_OllamaWeg(),

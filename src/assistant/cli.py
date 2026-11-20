@@ -146,10 +146,15 @@ def _cmd_ask(args: argparse.Namespace, c: Components) -> int:
     if c.store.count() == 0:
         print("Der Index ist leer. Erst `assistant index <pfad>` ausführen.", file=sys.stderr)
         return 1
-    retriever = Retriever(c.embedder, c.store, modus=suchmodus(c.settings.suchmodus))
-    vault_name = c.settings.vault_name
+    s = c.settings
+    retriever = Retriever(
+        c.embedder, c.store, modus=s.suchmodus, erreichbar=lambda: ollama_reachable(s.ollama_url)
+    )
+    vault_name = s.vault_name
     if args.nur_suche:
-        hits = retriever.search_notes(args.frage, args.k)
+        hits, modus = retriever.search_notes_mit_modus(args.frage, args.k)
+        if modus != retriever.modus:
+            print("Ollama nicht erreichbar: nur Stichwortsuche (BM25).", file=sys.stderr)
         print("Quellen:")
         for nr, h in enumerate(hits, start=1):
             print(_quelle(nr, h.chunk.path, h.chunk.title, h.chunk.heading, vault_name))
@@ -178,7 +183,9 @@ def _cmd_eval(args: argparse.Namespace, c: Components) -> int:
         Path(args.vault), embedder, store, max_chars=args.max_zeichen, overlap=args.ueberlappung
     )
     fragen = load_questions(Path(args.fragen))
-    ergebnis = evaluate(Retriever(embedder, store, modus=modus), fragen, args.k)
+    # Ohne Rückfall: Ist Ollama weg, scheitert der Eval, statt still nur BM25 zu messen.
+    retriever = Retriever(embedder, store, modus=modus, rueckfall=False)
+    ergebnis = evaluate(retriever, fragen, args.k)
 
     modell = "ohne Embeddings" if modus == "bm25" else f"Modell {embedder.model_name}"
     kopf = (

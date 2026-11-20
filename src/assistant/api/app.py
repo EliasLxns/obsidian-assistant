@@ -36,7 +36,7 @@ from assistant.llm.answer import answer_question
 from assistant.llm.client import ollama_reachable
 from assistant.nightly.guard import Pause, aktive_pause, pause_aufheben, pause_setzen
 from assistant.nightly.uebersicht import InboxNotiz, inbox_uebersicht
-from assistant.retrieval.search import Retriever, suchmodus
+from assistant.retrieval.search import Retriever
 from assistant.statistik import vault_statistik
 
 AUSZUG_ZEICHEN = 300
@@ -200,7 +200,7 @@ def create_app(
     c = components
     s = c.settings
     pruefe_ollama = ping or (lambda: ollama_reachable(s.ollama_url))
-    retriever = Retriever(c.embedder, c.store, modus=suchmodus(s.suchmodus))
+    retriever = Retriever(c.embedder, c.store, modus=s.suchmodus, erreichbar=pruefe_ollama)
     index_sperre = threading.Lock()  # nie zwei Indexläufe gleichzeitig
     letzter: list[IndexlaufOut] = []
 

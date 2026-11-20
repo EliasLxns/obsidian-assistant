@@ -12,6 +12,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+# Wie in retrieval/search.py (dort als Literal); hier ohne Import, damit config schlank bleibt.
+SUCHMODI = ("vektor", "bm25", "hybrid")
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -71,6 +74,10 @@ def load_settings(
     def get(name: str, default: str) -> str:
         return werte.get(name) or default
 
+    modus = get("SEARCH_MODE", d.suchmodus).strip().lower()
+    if modus not in SUCHMODI:
+        raise ValueError(f"SEARCH_MODE={modus!r} ist ungültig, erlaubt: {', '.join(SUCHMODI)}")
+
     return Settings(
         ollama_url=get("OLLAMA_URL", d.ollama_url).rstrip("/"),
         embed_model=get("EMBED_MODEL", d.embed_model),
@@ -82,7 +89,7 @@ def load_settings(
         timeout_s=float(get("OLLAMA_TIMEOUT", str(d.timeout_s))),
         chroma_host=get("CHROMA_HOST", d.chroma_host),
         chroma_port=int(get("CHROMA_PORT", str(d.chroma_port))),
-        suchmodus=get("SEARCH_MODE", d.suchmodus).strip().lower(),
+        suchmodus=modus,
         watch_polling=_ja(get("WATCH_POLLING", "")),
         inbox_dir=get("INBOX_DIR", d.inbox_dir),
         nightly_time=get("NIGHTLY_TIME", d.nightly_time),
