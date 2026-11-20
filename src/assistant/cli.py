@@ -19,7 +19,7 @@ from watchdog.observers.api import BaseObserver
 from assistant.components import Components, ComponentsFactory, default_components
 from assistant.config import Settings, load_settings
 from assistant.evaluation import evaluate, format_details, format_table, load_questions
-from assistant.index.embedder import OllamaError
+from assistant.index.embedder import FakeEmbedder, OllamaError
 from assistant.index.store import InMemoryStore
 from assistant.ingest.chunker import DEFAULT_MAX_CHARS, DEFAULT_OVERLAP
 from assistant.ingest.indexer import IndexReport, index_notes, index_vault
@@ -48,7 +48,7 @@ from assistant.nightly.power import (
 )
 from assistant.nightly.protocol import alle_laeufe
 from assistant.nightly.wol import WakeOnLan
-from assistant.retrieval.search import Retriever
+from assistant.retrieval.search import SUCHMODI, Retriever, suchmodus
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -80,6 +80,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("-k", type=int, default=5, help="Treffer@k (Standard: 5)")
     p_eval.add_argument("--max-zeichen", type=int, default=DEFAULT_MAX_CHARS)
     p_eval.add_argument("--ueberlappung", type=int, default=DEFAULT_OVERLAP)
+    p_eval.add_argument(
+        "--modus",
+        choices=SUCHMODI,
+        help="Suchmodus (Standard: SEARCH_MODE aus .env, sonst hybrid); bm25 läuft ohne Ollama",
+    )
     p_eval.add_argument("--details", action="store_true", help="Ergebnis je Frage zeigen")
     p_eval.add_argument("--ausgabe", help="Ergebnis zusätzlich als Markdown-Datei speichern")
 
@@ -141,10 +146,15 @@ def _cmd_ask(args: argparse.Namespace, c: Components) -> int:
     if c.store.count() == 0:
         print("Der Index ist leer. Erst `assistant index <pfad>` ausführen.", file=sys.stderr)
         return 1
-    retriever = Retriever(c.embedder, c.store)
-    vault_name = c.settings.vault_name
+    s = c.settings
+    retriever = Retriever(
+        c.embedder, c.store, modus=s.suchmodus, erreichbar=lambda: ollama_reachable(s.ollama_url)
+    )
+    vault_name = s.vault_name
     if args.nur_suche:
-        hits = retriever.search_notes(args.frage, args.k)
+        hits, modus = retriever.search_notes_mit_modus(args.frage, args.k)
+        if modus != retriever.modus:
+            print("Ollama nicht erreichbar: nur Stichwortsuche (BM25).", file=sys.stderr)
         print("Quellen:")
         for nr, h in enumerate(hits, start=1):
             print(_quelle(nr, h.chunk.path, h.chunk.title, h.chunk.heading, vault_name))
@@ -166,14 +176,20 @@ def _cmd_eval(args: argparse.Namespace, c: Components) -> int:
     # Eigener Index im Speicher: Der Eval stört so nie den echten Index.
     # Dank Embedding-Cache werden nur geänderte Chunks neu berechnet.
     store = InMemoryStore()
+    modus = suchmodus(args.modus or c.settings.suchmodus)
+    # BM25 braucht keine Vektoren: Platzhalter-Embeddings, damit der Eval ohne Ollama läuft.
+    embedder = FakeEmbedder() if modus == "bm25" else c.embedder
     index_vault(
-        Path(args.vault), c.embedder, store, max_chars=args.max_zeichen, overlap=args.ueberlappung
+        Path(args.vault), embedder, store, max_chars=args.max_zeichen, overlap=args.ueberlappung
     )
     fragen = load_questions(Path(args.fragen))
-    ergebnis = evaluate(Retriever(c.embedder, store), fragen, args.k)
+    # Ohne Rückfall: Ist Ollama weg, scheitert der Eval, statt still nur BM25 zu messen.
+    retriever = Retriever(embedder, store, modus=modus, rueckfall=False)
+    ergebnis = evaluate(retriever, fragen, args.k)
 
+    modell = "ohne Embeddings" if modus == "bm25" else f"Modell {embedder.model_name}"
     kopf = (
-        f"Eval: {len(fragen)} Fragen, Modell {c.embedder.model_name}, "
+        f"Eval: {len(fragen)} Fragen, Suche {modus}, {modell}, "
         f"Chunks max. {args.max_zeichen} Zeichen / Überlappung {args.ueberlappung}"
     )
     teile = [kopf, "", format_table(ergebnis)]

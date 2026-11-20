@@ -116,4 +116,9 @@ def format_details(result: EvalResult) -> str:
             f"| {r.question.frage} | {r.question.typ} | {rang if rang else '–'} | "
             f"{'✓' if r.hit_at(result.k) else '✗'} |"
         )
+    zeilen += [
+        "",
+        "Rang: Platz der ersten erwarteten Notiz. Bei „mehrere“ zählt ein Treffer erst, wenn alle "
+        f"erwarteten Notizen (höchstens {result.k}) unter den ersten {result.k} sind.",
+    ]
     return "\n".join(zeilen)

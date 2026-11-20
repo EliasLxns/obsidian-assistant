@@ -41,7 +41,13 @@ def test_fingerprints_und_loeschen(store: VectorStore) -> None:
     assert store.query([1.0, 0.0], k=5)[0].chunk.id == "b.md#0"
 
 
+def test_alle_chunks(store: VectorStore) -> None:
+    store.upsert(_chunks(), [[1.0, 0.0], [0.0, 1.0]], "bge-m3")
+    assert sorted(store.alle_chunks(), key=lambda c: c.id) == _chunks()
+
+
 def test_leerer_store(store: VectorStore) -> None:
+    assert store.alle_chunks() == []
     assert store.query([1.0, 0.0], k=3) == []
     store.delete([])
     store.upsert([], [], "m")

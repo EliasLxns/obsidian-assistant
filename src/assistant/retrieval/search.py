@@ -1,13 +1,41 @@
-"""Suche über den Index.
+"""Suche über den Index: Vektor, BM25 oder beides (hybrid).
 
-Phase 1: reine Vektorsuche. Hybrid mit BM25 und Link-Erweiterung folgen in Phase 2
-hinter derselben ``Retriever``-Schnittstelle.
+Die Modi:
+
+- ``vektor``: Kosinus-Ähnlichkeit der Embeddings. Findet Umschreibungen.
+- ``bm25``: Stichwortsuche (siehe ``bm25.py``). Findet exakte Begriffe und braucht kein Ollama.
+- ``hybrid``: beide Ranglisten per Reciprocal Rank Fusion (RRF) zusammengeführt. Ist Ollama
+  nicht erreichbar, sucht ``hybrid`` nur mit BM25 weiter, statt zu scheitern.
+
+RRF nutzt nur die Plätze, nicht die Scores: ``score = Σ 1 / (60 + platz)``. So müssen
+Kosinus-Werte (0 bis 1) und BM25-Werte (offen nach oben) nicht vergleichbar gemacht werden.
 """
 
 from __future__ import annotations
 
-from assistant.index.embedder import Embedder
+import logging
+import threading
+import time
+from collections.abc import Callable
+from typing import Literal
+
+from assistant.index.embedder import Embedder, OllamaError
 from assistant.index.store import Hit, VectorStore
+from assistant.retrieval.bm25 import Bm25
+
+log = logging.getLogger(__name__)
+
+Suchmodus = Literal["vektor", "bm25", "hybrid"]
+SUCHMODI: tuple[Suchmodus, ...] = ("vektor", "bm25", "hybrid")
+RRF_K = 60  # Standardwert aus dem RRF-Paper (Cormack et al. 2009)
+
+
+def suchmodus(wert: str) -> Suchmodus:
+    """Prüft einen Modus aus ``.env`` oder der Kommandozeile."""
+    for m in SUCHMODI:
+        if wert == m:
+            return m
+    raise ValueError(f"Unbekannter Suchmodus '{wert}', erlaubt: {', '.join(SUCHMODI)}")
 
 
 def best_per_note(hits: list[Hit]) -> list[Hit]:
@@ -21,20 +49,127 @@ def best_per_note(hits: list[Hit]) -> list[Hit]:
     return ergebnis
 
 
+def rrf(*ranglisten: list[Hit], k: int = RRF_K) -> list[Hit]:
+    """Führt Ranglisten zusammen. ``score`` ist danach der RRF-Wert, höher ist besser."""
+    punkte: dict[str, float] = {}
+    chunks: dict[str, Hit] = {}
+    for liste in ranglisten:
+        for platz, hit in enumerate(liste, start=1):
+            punkte[hit.chunk.id] = punkte.get(hit.chunk.id, 0.0) + 1 / (k + platz)
+            chunks.setdefault(hit.chunk.id, hit)
+    reihenfolge = sorted(punkte, key=lambda i: punkte[i], reverse=True)
+    return [Hit(chunks[i].chunk, round(punkte[i], 6)) for i in reihenfolge]
+
+
 class Retriever:
-    def __init__(self, embedder: Embedder, store: VectorStore, *, oversample: int = 4) -> None:
+    """``modus`` gilt für ``search`` und ``search_notes``.
+
+    ``score`` hängt vom Modus ab: Kosinus (vektor), BM25-Wert (bm25) oder RRF-Wert (hybrid).
+    Wer eine feste Schwelle braucht (Nachtjob: Links erst ab Kosinus 0,3), nutzt ``vektor``.
+
+    ``erreichbar`` (z. B. ``ollama_reachable`` mit 2 s Timeout) prüft vor der Vektorsuche, ob
+    Ollama antwortet. Ohne die Prüfung würde ``hybrid`` bei schlafendem PC erst nach dem vollen
+    Ollama-Timeout auf BM25 zurückfallen. Das Ergebnis gilt ``pruef_intervall_s`` Sekunden.
+    ``rueckfall=False`` (Eval) lässt ``hybrid`` scheitern, statt still nur BM25 zu messen.
+    """
+
+    def __init__(
+        self,
+        embedder: Embedder,
+        store: VectorStore,
+        *,
+        oversample: int = 4,
+        modus: str = "vektor",
+        erreichbar: Callable[[], bool] | None = None,
+        rueckfall: bool = True,
+        pruef_intervall_s: float = 30.0,
+        bm25_max_alter_s: float = 60.0,
+        uhr: Callable[[], float] = time.monotonic,
+    ) -> None:
         self.embedder = embedder
         self.store = store
         self.oversample = oversample
+        self.modus = suchmodus(modus)
+        self.rueckfall = rueckfall
+        self._erreichbar = erreichbar
+        self._pruef_intervall_s = pruef_intervall_s
+        self._bm25_max_alter_s = bm25_max_alter_s
+        self._uhr = uhr
+        self._sperre = threading.Lock()
+        self._ping: tuple[float, bool] | None = None  # (Zeitpunkt, Ergebnis)
+        self._bm25: tuple[float, int, Bm25] | None = None  # (gebaut um, Anzahl Chunks, Index)
+
+    def _bm25_index(self) -> Bm25:
+        """BM25 über alle Chunks im Store.
+
+        Neu gebaut, wenn sich die Anzahl der Chunks ändert oder der Index älter als
+        ``bm25_max_alter_s`` ist. So kostet eine Suche nur ein ``count()``, und geänderte
+        Notizen sind spätestens nach einer Minute auch per Stichwort auffindbar.
+        """
+        jetzt, anzahl = self._uhr(), self.store.count()
+        with self._sperre:  # eine Instanz bedient mehrere API-Threads
+            cache = self._bm25
+            if cache and cache[1] == anzahl and jetzt - cache[0] < self._bm25_max_alter_s:
+                return cache[2]
+            index = Bm25(self.store.alle_chunks())
+            self._bm25 = (jetzt, anzahl, index)
+            return index
+
+    def _ollama_da(self) -> bool:
+        if self._erreichbar is None:
+            return True
+        jetzt = self._uhr()
+        with self._sperre:
+            if self._ping and jetzt - self._ping[0] < self._pruef_intervall_s:
+                return self._ping[1]
+        da = self._erreichbar()
+        with self._sperre:
+            self._ping = (jetzt, da)
+        return da
+
+    def _treffer(self, query: str, n: int) -> tuple[list[Hit], Suchmodus]:
+        """Treffer und der Modus, mit dem tatsächlich gesucht wurde."""
+        if self.modus == "bm25":
+            return self._bm25_index().search(query, n), "bm25"
+        if self.modus == "vektor":
+            return self.store.query(self.embedder.embed_query(query), n), "vektor"
+        stichwort = self._bm25_index().search(query, n)
+        if not self.rueckfall:
+            return rrf(self.store.query(self.embedder.embed_query(query), n), stichwort)[
+                :n
+            ], "hybrid"
+        if not self._ollama_da():
+            return stichwort, "bm25"
+        try:
+            vektor = self.store.query(self.embedder.embed_query(query), n)
+        except OllamaError as e:
+            log.warning("Ollama nicht erreichbar, suche nur mit BM25: %s", e)
+            with self._sperre:
+                self._ping = (self._uhr(), False)
+            return stichwort, "bm25"
+        return rrf(vektor, stichwort)[:n], "hybrid"
 
     def search(self, query: str, k: int = 5) -> list[Hit]:
-        """Die ``k`` ähnlichsten Chunks."""
-        return self.store.query(self.embedder.embed_query(query), k)
+        """Die ``k`` besten Chunks."""
+        return self.search_mit_modus(query, k)[0]
+
+    def search_mit_modus(self, query: str, k: int = 5) -> tuple[list[Hit], Suchmodus]:
+        """Wie ``search``, dazu der tatsächlich genutzte Modus (``bm25``, wenn ``hybrid``
+        ohne Ollama weitersuchen musste)."""
+        if self.modus == "vektor":
+            return self._treffer(query, k)
+        # Für die Fusion beide Listen etwas länger holen, sonst fehlen Kandidaten.
+        hits, modus = self._treffer(query, k * self.oversample)
+        return hits[:k], modus
 
     def search_notes(self, query: str, k: int = 5) -> list[Hit]:
-        """Die ``k`` besten Notizen, je mit ihrem besten Chunk.
+        """Die ``k`` besten Notizen, je mit ihrem besten Chunk."""
+        return self.search_notes_mit_modus(query, k)[0]
+
+    def search_notes_mit_modus(self, query: str, k: int = 5) -> tuple[list[Hit], Suchmodus]:
+        """Wie ``search_notes``, dazu der tatsächlich genutzte Modus.
 
         Es werden mehr Chunks geholt als nötig, weil eine Notiz mehrere Treffer haben kann.
         """
-        hits = self.store.query(self.embedder.embed_query(query), k * self.oversample)
-        return best_per_note(hits)[:k]
+        hits, modus = self._treffer(query, k * self.oversample)
+        return best_per_note(hits)[:k], modus

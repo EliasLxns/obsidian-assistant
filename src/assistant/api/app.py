@@ -1,7 +1,7 @@
 """REST-API für Dashboard und Obsidian-Plugin.
 
 - ``POST /ask``: Frage beantworten, mit Quellen als ``obsidian://``-Links
-- ``POST /search``: nur suchen, ohne Chat-Modell (geht auch, wenn nur Embeddings laufen)
+- ``POST /search``: nur suchen, ohne Chat-Modell (mit ``SEARCH_MODE=hybrid`` auch ohne Ollama)
 - ``GET /status``: Index-Größe, Modelle, letzter Indexlauf, ist Ollama erreichbar?
 - ``POST /reindex``: Vault neu einlesen (nur Geändertes wird eingebettet)
 - ``GET /inbox``: offene Inbox-Notizen, „Prüfen“-Ordner, letzte Nachtläufe, Pause
@@ -59,6 +59,7 @@ class Quelle(BaseModel):
 
 class SucheOut(BaseModel):
     quellen: list[Quelle]
+    modus: str  # vektor | bm25 | hybrid; bm25 auch, wenn hybrid ohne Ollama weitersuchen musste
 
 
 class AntwortOut(BaseModel):
@@ -199,7 +200,7 @@ def create_app(
     c = components
     s = c.settings
     pruefe_ollama = ping or (lambda: ollama_reachable(s.ollama_url))
-    retriever = Retriever(c.embedder, c.store)
+    retriever = Retriever(c.embedder, c.store, modus=s.suchmodus, erreichbar=pruefe_ollama)
     index_sperre = threading.Lock()  # nie zwei Indexläufe gleichzeitig
     letzter: list[IndexlaufOut] = []
 
@@ -228,10 +229,10 @@ def create_app(
     def search(body: FrageIn) -> SucheOut:
         _index_nicht_leer()
         try:
-            hits = retriever.search_notes(body.frage, body.k)
+            hits, modus = retriever.search_notes_mit_modus(body.frage, body.k)
         except OllamaError as e:
             raise _ollama_fehler(e) from e
-        return SucheOut(quellen=_quellen(hits, s.vault_name))
+        return SucheOut(quellen=_quellen(hits, s.vault_name), modus=modus)
 
     @app.post("/ask")
     def ask(body: FrageIn) -> AntwortOut:

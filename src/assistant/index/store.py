@@ -44,6 +44,10 @@ class VectorStore(Protocol):
 
     def count(self) -> int: ...
 
+    def alle_chunks(self) -> list[Chunk]:
+        """Alle Chunks ohne Vektoren, z. B. für die BM25-Suche."""
+        ...
+
 
 def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     zaehler = sum(x * y for x, y in zip(a, b, strict=True))
@@ -75,6 +79,9 @@ class InMemoryStore:
 
     def count(self) -> int:
         return len(self._daten)
+
+    def alle_chunks(self) -> list[Chunk]:
+        return [c for c, _, _ in self._daten.values()]
 
 
 _TRENNER = "\x1f"  # Chroma-Metadaten erlauben nur Skalare, Listen werden zu einem String
@@ -185,3 +192,10 @@ class ChromaStore:
 
     def count(self) -> int:
         return int(self._col.count())
+
+    def alle_chunks(self) -> list[Chunk]:
+        res = cast(dict[str, Any], self._col.get(include=["documents", "metadatas"]))
+        ids = cast(list[str], res["ids"])
+        docs = cast(list[str], res["documents"])
+        metas = cast(list[dict[str, Any]], res["metadatas"])
+        return [self._chunk(i, d, m) for i, d, m in zip(ids, docs, metas, strict=True)]
