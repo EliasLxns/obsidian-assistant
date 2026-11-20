@@ -14,6 +14,7 @@ from assistant.index.store import Hit, InMemoryStore
 from assistant.ingest.chunker import Chunk
 from assistant.llm.client import FakeLLM
 from assistant.retrieval.bm25 import Bm25, stamm, woerter
+from assistant.retrieval.links import LinkGraph, einfuegen
 from assistant.retrieval.search import SUCHMODI, Retriever, rrf, suchmodus
 
 
@@ -162,7 +163,9 @@ def test_suchmodus_aus_env() -> None:
     with pytest.raises(ValueError, match="SEARCH_MODE='vector' ist ungültig"):
         load_settings(environ={"SEARCH_MODE": "vector"}, env_file=Path("fehlt.env"))
     assert load_settings(environ={"SEARCH_MODE": " Hybrid "}).suchmodus == "hybrid"
-    assert load_settings(environ={}, env_file=Path("fehlt.env")).suchmodus == "hybrid"
+    standard = load_settings(environ={}, env_file=Path("fehlt.env"))
+    assert standard.suchmodus == "hybrid" and not standard.link_erweiterung
+    assert load_settings(environ={"LINK_EXPANSION": "ja"}, env_file=Path("x")).link_erweiterung
 
 
 def test_api_search_ohne_ollama(demo_store: InMemoryStore) -> None:
@@ -176,3 +179,53 @@ def test_api_search_ohne_ollama(demo_store: InMemoryStore) -> None:
     daten = client.post("/search", json={"frage": "Eisheilige", "k": 3}).json()
     assert daten["modus"] == "bm25"
     assert daten["quellen"][0]["pfad"].endswith("Aussaatkalender.md")
+
+
+# --- Link-Erweiterung --------------------------------------------------------------------
+
+
+def _verlinkt(pfad: str, text: str, *links: str) -> Chunk:
+    titel = pfad.removesuffix(".md")
+    return Chunk(f"{pfad}#0", pfad, titel, "", text, links=links)
+
+
+def test_linkgraph_loest_wie_obsidian_auf() -> None:
+    g = LinkGraph([_verlinkt("03 Wissen/Docker/Compose.md", "x"), _verlinkt("Compose.md", "y")])
+    assert g.ziel("compose") == "Compose.md"  # gleicher Name: kürzester Pfad
+    assert g.ziel("03 Wissen/Docker/Compose#Starten") == "03 Wissen/Docker/Compose.md"
+    assert g.ziel("Gibt es nicht") is None
+
+
+def test_verlinkte_notizen_kommen_hinter_die_besten() -> None:
+    chunks = [
+        _verlinkt("Bericht.md", "Halbmarathon Zielzeit geschafft", "Plan"),
+        _verlinkt("Plan.md", "Trainingsplan mit langen Läufen"),
+        _verlinkt("A.md", "Halbmarathon a"),
+        _verlinkt("B.md", "Halbmarathon b"),
+        _verlinkt("C.md", "Halbmarathon c"),
+    ]
+    store = InMemoryStore()
+    emb = FakeEmbedder()
+    store.upsert(chunks, emb.embed_documents([c.embed_text for c in chunks]), "fake")
+    ohne = Retriever(emb, store, modus="bm25").search_notes("Halbmarathon Zielzeit", 5)
+    mit = Retriever(emb, store, modus="bm25", link_erweiterung=True).search_notes(
+        "Halbmarathon Zielzeit", 5
+    )
+    assert "Plan.md" not in [h.chunk.path for h in ohne]  # kein gemeinsames Wort
+    pfade = [h.chunk.path for h in mit]
+    assert pfade[0] == "Bericht.md"  # die ersten Plätze bleiben
+    assert pfade.index("Plan.md") == 3  # direkt hinter den besten drei
+    assert len(pfade) == len(set(pfade))
+
+
+def test_einfuegen_ohne_links_und_ohne_doppelte() -> None:
+    a, b = _verlinkt("a.md", "a"), _verlinkt("b.md", "b")
+    treffer = [Hit(a, 1.0), Hit(b, 0.5)]
+    assert einfuegen(treffer, []) == treffer
+    assert einfuegen(treffer, [Hit(b, 0.0)]) == treffer  # b ist schon oben
+
+
+def test_vektor_modus_ignoriert_links(embedder: FakeEmbedder, demo_store: InMemoryStore) -> None:
+    mit = Retriever(embedder, demo_store, modus="vektor", link_erweiterung=True)
+    ohne = Retriever(embedder, demo_store, modus="vektor")
+    assert mit.search_notes("Halbmarathon", 5) == ohne.search_notes("Halbmarathon", 5)

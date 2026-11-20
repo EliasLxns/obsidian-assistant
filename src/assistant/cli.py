@@ -153,7 +153,11 @@ def _cmd_ask(args: argparse.Namespace, c: Components) -> int:
         return 1
     s = c.settings
     retriever = Retriever(
-        c.embedder, c.store, modus=s.suchmodus, erreichbar=lambda: ollama_reachable(s.ollama_url)
+        c.embedder,
+        c.store,
+        modus=s.suchmodus,
+        erreichbar=lambda: ollama_reachable(s.ollama_url),
+        link_erweiterung=s.link_erweiterung,
     )
     vault_name = s.vault_name
     if args.nur_suche:
