@@ -297,7 +297,7 @@ def test_cli_pause_laeufe_rueckgaengig(
     assert "Wiederhergestellt" in aus and "Protokoll entfernt" in aus and "Git-Commit" in aus
     assert (vault / IDEE).exists()
     assert _git_log(vault)[0].endswith("rückgängig")
-    assert not list((vault / "00 Inbox/Protokoll").glob("*.md"))
+    assert not (vault / "00 Inbox/Protokoll").exists()  # leerer Ordner ist auch weg
 
 
 def test_cli_ausserhalb_des_fensters(vault: Path, tmp_path: Path) -> None:

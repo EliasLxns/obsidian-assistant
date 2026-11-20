@@ -1,7 +1,8 @@
 """Eval: misst, ob die Suche die erwarteten Notizen findet (Treffer@1 und Treffer@k).
 
 Treffer@k zählt, wenn die erwartete Notiz unter den ersten k Notizen ist.
-Bei ``typ: mehrere`` müssen so viele erwartete Notizen unter den ersten k sein,
+Bei ``typ: mehrere`` und ``verlinkt`` (die zweite Notiz ist über einen Wikilink der ersten
+erreichbar) müssen so viele erwartete Notizen unter den ersten k sein,
 wie hineinpassen: bei k=1 also eine, bei k=5 alle (höchstens fünf).
 """
 
@@ -16,7 +17,7 @@ import yaml
 
 from assistant.retrieval.search import Retriever
 
-TYPEN = ("exakt", "umschreibung", "mehrere")
+TYPEN = ("exakt", "umschreibung", "mehrere", "verlinkt")
 
 
 @dataclass(frozen=True)
@@ -118,7 +119,8 @@ def format_details(result: EvalResult) -> str:
         )
     zeilen += [
         "",
-        "Rang: Platz der ersten erwarteten Notiz. Bei „mehrere“ zählt ein Treffer erst, wenn alle "
-        f"erwarteten Notizen (höchstens {result.k}) unter den ersten {result.k} sind.",
+        "Rang: Platz der ersten erwarteten Notiz. Bei „mehrere“ und „verlinkt“ zählt ein "
+        f"Treffer erst, wenn alle erwarteten Notizen (höchstens {result.k}) unter den ersten "
+        f"{result.k} sind.",
     ]
     return "\n".join(zeilen)

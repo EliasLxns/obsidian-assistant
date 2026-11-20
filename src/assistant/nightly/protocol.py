@@ -169,4 +169,6 @@ def rueckgaengig(vault: Path, lauf: Lauf, protokoll: Path | None = None) -> list
         else:
             protokoll.unlink()
             meldungen.append(f"Protokoll entfernt: {protokoll.name}")
+            if not any(protokoll.parent.iterdir()):  # leeren Ordner nicht in Obsidian lassen
+                protokoll.parent.rmdir()
     return meldungen

@@ -41,8 +41,18 @@ def test_wikilinks_zeigen_auf_vorhandene_notizen() -> None:
             assert ziel.strip() in namen, f"{notiz.name}: [[{ziel}]] fehlt"
 
 
-def test_eval_set_hat_20_fragen() -> None:
-    assert len(_fragen()) == 20
+def test_eval_set_hat_23_fragen() -> None:
+    assert len(_fragen()) == 23
+
+
+def test_verlinkte_fragen_haben_einen_wikilink() -> None:
+    """Bei typ: verlinkt verlinkt die erste erwartete Notiz auf die zweite."""
+    for eintrag in _fragen():
+        if eintrag["typ"] != "verlinkt":
+            continue
+        erste, zweite = cast(list[str], eintrag["erwartet"])[:2]
+        text = (VAULT / erste).read_text(encoding="utf-8")
+        assert f"[[{Path(zweite).stem}" in text, eintrag["frage"]
 
 
 def test_erwartete_notizen_existieren() -> None:

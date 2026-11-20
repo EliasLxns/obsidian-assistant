@@ -32,7 +32,7 @@ flowchart LR
 ## Datenfluss einer Frage
 
 1. Plugin oder Dashboard schickt die Frage an `/ask`.
-2. Der Retriever kombiniert BM25 und Vektorsuche (Reciprocal Rank Fusion). Verlinkte Notizen zu ergänzen folgt in Phase 5.
+2. Der Retriever kombiniert BM25 und Vektorsuche (Reciprocal Rank Fusion) und ergänzt Notizen, auf die die besten Treffer verlinken.
 3. Die besten Chunks gehen mit einem Prompt an das Chat-Modell in Ollama.
 4. Die Antwort kommt mit Quellen als `obsidian://`-Links zurück.
 
@@ -166,3 +166,10 @@ flowchart LR
 - **Der BM25-Index** wird aus den Chunks im Store gebaut, im Speicher gehalten und neu gebaut, wenn sich die Anzahl der Chunks ändert oder er älter als eine Minute ist. Eine Suche kostet so nur ein `count()`.
 - **Kein Warten auf den schlafenden PC:** Vor der Vektorsuche prüft die API mit 2 s Timeout, ob Ollama antwortet, und merkt sich das Ergebnis 30 s. `assistant eval` fällt nie still auf BM25 zurück, sondern scheitert sichtbar.
 - **Gemessen:** Treffer@1 95 % → 100 %, Treffer@5 bleibt 100 % (siehe [Eval-Ergebnisse](eval-ergebnisse.md)).
+
+### Link-Erweiterung
+
+- **Idee:** Wer in Obsidian schreibt, verlinkt Zusammenhänge selbst. Notizen, auf die die besten drei Treffer verlinken, kommen deshalb mit in die Auswahl, auch wenn sie andere Wörter benutzen als die Frage.
+- **Wohin in der Liste?** Direkt hinter die besten drei Notizen, zuerst die, auf die mehrere Treffer zeigen. Eine Fusion per RRF hat im Eval Treffer@1 verschlechtert, das Einfügen lässt die ersten Plätze unverändert.
+- **Links auflösen** wie Obsidian: über Pfad oder Name, ohne Groß/klein, bei gleichen Namen der kürzeste Pfad (`retrieval/links.py`). Der Link-Graph wird zusammen mit dem BM25-Index gebaut.
+- **Nicht im Nachtjob:** Der verlinkt neue Notizen weiter nur mit der reinen Vektorsuche.

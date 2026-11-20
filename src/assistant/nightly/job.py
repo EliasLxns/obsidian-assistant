@@ -39,7 +39,7 @@ class Optionen:
     # ``max_abstand`` hinter dem besten Treffer liegen. Mit bge-m3 erreichen selbst fremde
     # Notizen ~0,44, passende 0,53 bis 0,71 (Probelauf 20.11.2026).
     min_score: float = 0.5
-    max_abstand: float = 0.1
+    max_abstand: float = 0.12
     git: bool = True
     schon_wach_ueberspringen: bool = False  # Gaming-Schutz, siehe guard.py
 
@@ -155,6 +155,7 @@ def _ablauf(
     ordner = inbox.zielordner(vault, s.inbox_dir, dateien=alle)
     namen = inbox.wikilink_namen(vault, dateien=alle)
     vault_tags = inbox.vorhandene_tags(vault, s.inbox_dir, dateien=alle)
+    themen = inbox.ordner_themen(vault, s.inbox_dir, dateien=alle)
 
     # 4. Inbox. Ein Fehler bei einer Notiz stoppt nicht den ganzen Lauf.
     for datei in offen:
@@ -168,7 +169,17 @@ def _ablauf(
                 ergebnis = _frage(note, text, rel, retriever, c, namen, jetzt, s.inbox_dir)
             else:
                 ergebnis = _sortieren(
-                    note, text, rel, vault, retriever, c, ordner, namen, vault_tags, optionen
+                    note,
+                    text,
+                    rel,
+                    vault,
+                    retriever,
+                    c,
+                    ordner,
+                    namen,
+                    vault_tags,
+                    themen,
+                    optionen,
                 )
             if ergebnis is None:
                 continue
@@ -238,6 +249,7 @@ def _sortieren(
     ordner: dict[str, list[str]],
     namen: Counter[str],
     vault_tags: list[str],
+    themen: dict[str, str],
     optionen: Optionen,
 ) -> tuple[Aktion, str]:
     s = c.settings
@@ -245,6 +257,7 @@ def _sortieren(
         retriever, text, s.inbox_dir, min_score=optionen.min_score, max_abstand=optionen.max_abstand
     )
     e = inbox.entscheiden(note, text, ordner, verwandt, c.llm, tags=vault_tags)
+    e = inbox.mit_thema(e, themen)
     links = [inbox.wikilink(h.chunk.path, namen) for h in verwandt]
     neu = protocol.wie_original(inbox.notiz_ergaenzen(text, e.tags, links), text)
 

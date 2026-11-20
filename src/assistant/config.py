@@ -29,7 +29,7 @@ class Settings:
     chroma_host: str = ""  # leer: lokale Chroma-Datei unter chroma_path, sonst HTTP (Docker)
     chroma_port: int = 8000
     suchmodus: str = "hybrid"  # vektor | bm25 | hybrid (für /ask, /search, ask)
-    link_erweiterung: bool = False  # verlinkte Notizen mitnehmen (nur bm25/hybrid)
+    link_erweiterung: bool = True  # verlinkte Notizen mitnehmen (nur bm25/hybrid)
     watch_polling: bool = False  # Watcher fragt ab statt inotify (Docker Desktop unter Windows)
     # Nachtjob (Phase 3)
     inbox_dir: str = "00 Inbox"
@@ -91,7 +91,7 @@ def load_settings(
         chroma_host=get("CHROMA_HOST", d.chroma_host),
         chroma_port=int(get("CHROMA_PORT", str(d.chroma_port))),
         suchmodus=modus,
-        link_erweiterung=_ja(get("LINK_EXPANSION", "")),
+        link_erweiterung=_ja(get("LINK_EXPANSION", "ja")),
         watch_polling=_ja(get("WATCH_POLLING", "")),
         inbox_dir=get("INBOX_DIR", d.inbox_dir),
         nightly_time=get("NIGHTLY_TIME", d.nightly_time),

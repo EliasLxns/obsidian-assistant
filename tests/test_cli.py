@@ -77,7 +77,7 @@ def test_eval_zeigt_tabelle_und_speichert(
     assert main([*argv, "--ausgabe", str(ziel)], FakeApp()) == 0
     out = capsys.readouterr().out
     assert "| Typ | Fragen | Treffer@1 | Treffer@5 |" in out
-    assert "| **gesamt** | 20 |" in out
+    assert "| **gesamt** | 23 |" in out
     assert "Welchen Port nutzt Ollama?" in out
     assert ziel.read_text(encoding="utf-8").strip() == out.strip()
 

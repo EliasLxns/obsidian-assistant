@@ -164,8 +164,9 @@ def test_suchmodus_aus_env() -> None:
         load_settings(environ={"SEARCH_MODE": "vector"}, env_file=Path("fehlt.env"))
     assert load_settings(environ={"SEARCH_MODE": " Hybrid "}).suchmodus == "hybrid"
     standard = load_settings(environ={}, env_file=Path("fehlt.env"))
-    assert standard.suchmodus == "hybrid" and not standard.link_erweiterung
-    assert load_settings(environ={"LINK_EXPANSION": "ja"}, env_file=Path("x")).link_erweiterung
+    assert standard.suchmodus == "hybrid" and standard.link_erweiterung
+    aus = load_settings(environ={"LINK_EXPANSION": "false"}, env_file=Path("x"))
+    assert not aus.link_erweiterung
 
 
 def test_api_search_ohne_ollama(demo_store: InMemoryStore) -> None:
