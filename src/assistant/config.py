@@ -25,6 +25,7 @@ class Settings:
     timeout_s: float = 120.0
     chroma_host: str = ""  # leer: lokale Chroma-Datei unter chroma_path, sonst HTTP (Docker)
     chroma_port: int = 8000
+    suchmodus: str = "vektor"  # vektor | bm25 | hybrid (für /ask, /search, ask)
     watch_polling: bool = False  # Watcher fragt ab statt inotify (Docker Desktop unter Windows)
     # Nachtjob (Phase 3)
     inbox_dir: str = "00 Inbox"
@@ -81,6 +82,7 @@ def load_settings(
         timeout_s=float(get("OLLAMA_TIMEOUT", str(d.timeout_s))),
         chroma_host=get("CHROMA_HOST", d.chroma_host),
         chroma_port=int(get("CHROMA_PORT", str(d.chroma_port))),
+        suchmodus=get("SEARCH_MODE", d.suchmodus).strip().lower(),
         watch_polling=_ja(get("WATCH_POLLING", "")),
         inbox_dir=get("INBOX_DIR", d.inbox_dir),
         nightly_time=get("NIGHTLY_TIME", d.nightly_time),
