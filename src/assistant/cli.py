@@ -88,7 +88,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Suchmodus (Standard: SEARCH_MODE aus .env, sonst hybrid); bm25 läuft ohne Ollama",
     )
     p_eval.add_argument(
-        "--links", action="store_true", help="Link-Erweiterung an (nur bm25 und hybrid)"
+        "--links",
+        action=argparse.BooleanOptionalAction,
+        help="Link-Erweiterung an/aus (Standard: LINK_EXPANSION aus .env; nur bm25 und hybrid)",
     )
     p_eval.add_argument("--details", action="store_true", help="Ergebnis je Frage zeigen")
     p_eval.add_argument("--ausgabe", help="Ergebnis zusätzlich als Markdown-Datei speichern")
@@ -193,14 +195,14 @@ def _cmd_eval(args: argparse.Namespace, c: Components) -> int:
     )
     fragen = load_questions(Path(args.fragen))
     # Ohne Rückfall: Ist Ollama weg, scheitert der Eval, statt still nur BM25 zu messen.
-    retriever = Retriever(
-        embedder, store, modus=modus, rueckfall=False, link_erweiterung=args.links
-    )
+    mit_links = c.settings.link_erweiterung if args.links is None else args.links
+    retriever = Retriever(embedder, store, modus=modus, rueckfall=False, link_erweiterung=mit_links)
     ergebnis = evaluate(retriever, fragen, args.k)
 
     modell = "ohne Embeddings" if modus == "bm25" else f"Modell {embedder.model_name}"
+    suche = f"{modus} + Links" if mit_links and modus != "vektor" else modus
     kopf = (
-        f"Eval: {len(fragen)} Fragen, Suche {modus}{' + Links' if args.links else ''}, {modell}, "
+        f"Eval: {len(fragen)} Fragen, Suche {suche}, {modell}, "
         f"Chunks max. {args.max_zeichen} Zeichen / Überlappung {args.ueberlappung}"
     )
     teile = [kopf, "", format_table(ergebnis)]

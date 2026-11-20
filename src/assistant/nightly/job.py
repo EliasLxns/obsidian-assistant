@@ -37,7 +37,9 @@ class Optionen:
     min_alter: timedelta = timedelta(minutes=30)
     # Verwandte Notizen erst ab diesem Kosinus-Score verlinken und nur, wenn sie höchstens
     # ``max_abstand`` hinter dem besten Treffer liegen. Mit bge-m3 erreichen selbst fremde
-    # Notizen ~0,44, passende 0,53 bis 0,71 (Probelauf 20.11.2026).
+    # Notizen ~0,44, passende 0,53 bis 0,71 (Probelauf 20.11.2026). 0,12 statt 0,10 nach dem
+    # zweiten Lauf (21.11.): passende Notizen lagen 0,09 bis 0,11 hinter dem besten Treffer,
+    # die erste fremde 0,21.
     min_score: float = 0.5
     max_abstand: float = 0.12
     git: bool = True
@@ -257,7 +259,7 @@ def _sortieren(
         retriever, text, s.inbox_dir, min_score=optionen.min_score, max_abstand=optionen.max_abstand
     )
     e = inbox.entscheiden(note, text, ordner, verwandt, c.llm, tags=vault_tags)
-    e = inbox.mit_thema(e, themen)
+    e = inbox.mit_thema(e, themen, note.tags)
     links = [inbox.wikilink(h.chunk.path, namen) for h in verwandt]
     neu = protocol.wie_original(inbox.notiz_ergaenzen(text, e.tags, links), text)
 

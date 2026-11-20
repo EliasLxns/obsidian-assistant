@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Literal
 
 from assistant.index.embedder import Embedder, OllamaError
@@ -51,19 +51,13 @@ def best_per_note(hits: list[Hit]) -> list[Hit]:
     return ergebnis
 
 
-def rrf(
-    *ranglisten: list[Hit], k: int = RRF_K, gewichte: Sequence[float] | None = None
-) -> list[Hit]:
-    """Führt Ranglisten zusammen. ``score`` ist danach der RRF-Wert, höher ist besser.
-
-    ``gewichte`` je Liste (Standard 1): Die Link-Erweiterung zählt z. B. nur halb.
-    """
+def rrf(*ranglisten: list[Hit], k: int = RRF_K) -> list[Hit]:
+    """Führt Ranglisten zusammen. ``score`` ist danach der RRF-Wert, höher ist besser."""
     punkte: dict[str, float] = {}
     chunks: dict[str, Hit] = {}
-    for nr, liste in enumerate(ranglisten):
-        gewicht = gewichte[nr] if gewichte is not None else 1.0
+    for liste in ranglisten:
         for platz, hit in enumerate(liste, start=1):
-            punkte[hit.chunk.id] = punkte.get(hit.chunk.id, 0.0) + gewicht / (k + platz)
+            punkte[hit.chunk.id] = punkte.get(hit.chunk.id, 0.0) + 1 / (k + platz)
             chunks.setdefault(hit.chunk.id, hit)
     reihenfolge = sorted(punkte, key=lambda i: punkte[i], reverse=True)
     return [Hit(chunks[i].chunk, round(punkte[i], 6)) for i in reihenfolge]

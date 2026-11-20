@@ -177,7 +177,7 @@ Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), 
 
 `eval/questions.yaml` enthält 23 Fragen mit der Notiz, die gefunden werden soll: exakte Begriffe, Umschreibungen, Fragen, die mehrere Notizen brauchen, und Fragen, deren zweite Notiz über einen Wikilink erreichbar ist. Ziel für Version 1: Treffer@5 ≥ 80 %, Treffer@1 ≥ 50 %, Antwortzeit < 15 s.
 
-Stand 21.11.2026 mit `bge-m3`, Hybrid-Suche (Vektor + BM25) und Link-Erweiterung: **Treffer@1 100 %, Treffer@5 100 %**. BM25 allein, also ohne Ollama, erreicht mit Link-Erweiterung 65 % und 91 %. Details in [docs/eval-ergebnisse.md](docs/eval-ergebnisse.md).
+Stand 21.11.2026 mit `bge-m3`, Hybrid-Suche (Vektor + BM25) und Link-Erweiterung: **Treffer@1 100 %, Treffer@5 100 %** (gemessen auf den ersten 20 Fragen). BM25 allein, also ohne Ollama, erreicht mit Link-Erweiterung 65 % und 91 %. Details in [docs/eval-ergebnisse.md](docs/eval-ergebnisse.md).
 
 ## Roadmap
 

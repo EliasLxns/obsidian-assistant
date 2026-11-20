@@ -172,13 +172,16 @@ def ordner_themen(
     return themen
 
 
-def mit_thema(e: Entscheidung, themen: dict[str, str]) -> Entscheidung:
-    """Setzt den Thementag des Zielordners an den Anfang, falls das Modell ihn vergessen hat."""
+def mit_thema(
+    e: Entscheidung, themen: dict[str, str], vorhanden: Sequence[str] = ()
+) -> Entscheidung:
+    """Setzt den Thementag des Zielordners an den Anfang, falls weder das Modell ihn vergeben
+    hat noch die Notiz ihn schon trägt (``vorhanden``, ohne Groß/klein)."""
     if not e.ordner:
         return e
-    teile = e.ordner.split("/")
-    thema = themen.get("/".join(teile[:2])) or themen.get(teile[0])
-    if not thema or thema in e.tags:
+    thema = themen.get("/".join(e.ordner.split("/")[:2]))
+    schon = {t.casefold() for t in (*e.tags, *vorhanden)}
+    if not thema or thema.casefold() in schon:
         return e
     return Entscheidung(e.ordner, (thema, *e.tags)[:MAX_TAGS], e.sicher, e.grund)
 

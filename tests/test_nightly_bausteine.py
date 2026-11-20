@@ -332,3 +332,5 @@ def test_thema_des_zielordners_kommt_dazu() -> None:
     voll = Entscheidung("03 Wissen/Garten", ("a", "b", "c", "d"), True, "")
     assert mit_thema(voll, themen).tags == ("garten", "a", "b", "c")  # höchstens 4
     assert mit_thema(Entscheidung(None, ("a",), False, ""), themen).tags == ("a",)
+    # Trägt die Notiz den Tag schon (auch groß geschrieben), fällt kein Modell-Tag weg
+    assert mit_thema(voll, themen, ["Garten"]).tags == ("a", "b", "c", "d")

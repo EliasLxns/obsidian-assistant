@@ -216,6 +216,8 @@ def test_verlinkte_notizen_kommen_hinter_die_besten() -> None:
     pfade = [h.chunk.path for h in mit]
     assert pfade[0] == "Bericht.md"  # die ersten Plätze bleiben
     assert pfade.index("Plan.md") == 3  # direkt hinter den besten drei
+    scores = [h.score for h in mit]
+    assert scores == sorted(scores, reverse=True)  # eingefügt mit dem Score davor
     assert len(pfade) == len(set(pfade))
 
 

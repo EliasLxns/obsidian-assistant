@@ -77,6 +77,6 @@ Das Eval-Set hat drei neue Fragen vom Typ `verlinkt`: Die zweite Notiz ist über
 ### Nachvollziehen (Lauf 3)
 
 ```bash
-assistant eval --modus hybrid --links --details
-assistant eval --modus bm25 --links --details   # ohne Ollama
+assistant eval --modus hybrid --details   # LINK_EXPANSION=true ist Standard
+assistant eval --modus bm25 --details   # ohne Ollama; --no-links schaltet die Links ab
 ```

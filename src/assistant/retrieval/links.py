@@ -85,7 +85,10 @@ def einfuegen(treffer: list[Hit], verlinkt: list[Hit]) -> list[Hit]:
                 grenze = i
                 break
             notizen.append(h.chunk.path)
-    neu = [h for h in verlinkt if h.chunk.path not in notizen]
+    # Gleicher Score wie der letzte Treffer davor: Die Liste bleibt absteigend sortiert, und
+    # BM25-Werte vermischen sich nicht mit RRF- oder Kosinus-Werten.
+    score = treffer[grenze - 1].score if grenze else 0.0
+    neu = [Hit(h.chunk, score) for h in verlinkt if h.chunk.path not in notizen]
     pfade = {h.chunk.path for h in neu}
     rest = [h for h in treffer[grenze:] if h.chunk.path not in pfade]
     return [*treffer[:grenze], *neu, *rest]
