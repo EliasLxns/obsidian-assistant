@@ -1,0 +1,87 @@
+/* Nur Obsidian-Variablen: passt zu jedem Theme, hell wie dunkel. */
+.vault-assistent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-3);
+}
+
+.vault-assistent-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.vault-assistent-eingabe {
+  width: 100%;
+  resize: vertical;
+  font-size: var(--font-ui-medium);
+}
+
+.vault-assistent-zeile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+}
+
+.vault-assistent-schalter {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.vault-assistent-antwort {
+  white-space: pre-wrap;
+  line-height: var(--line-height-normal);
+  user-select: text;
+}
+
+.vault-assistent-ergebnis h4 {
+  margin: var(--size-4-3) 0 var(--size-4-1);
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vault-assistent-quellen {
+  margin: 0;
+  padding-left: var(--size-4-5);
+}
+
+.vault-assistent-quellen li {
+  margin-bottom: var(--size-4-2);
+}
+
+.vault-assistent-chip {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+
+.vault-assistent-ort,
+.vault-assistent-hinweis {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+.vault-assistent-auszug {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vault-assistent-fehler {
+  display: flex;
+  gap: var(--size-4-2);
+  align-items: flex-start;
+  padding: var(--size-4-2) var(--size-4-3);
+  border-radius: var(--radius-s);
+  background: rgba(var(--color-red-rgb), 0.1);
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+}

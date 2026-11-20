@@ -32,6 +32,32 @@ jobs:
       - name: Pytest
         run: pytest
 
+  plugin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: obsidian-plugin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: obsidian-plugin/package-lock.json
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Typprüfung
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Bauen
+        run: npm run build
+
   docker:
     runs-on: ubuntu-latest
     steps:

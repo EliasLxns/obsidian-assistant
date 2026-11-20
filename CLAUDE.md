@@ -81,6 +81,7 @@ assistant ask "Welchen Port nutzt Ollama?"
 assistant eval                   # Treffer@1 / Treffer@5 als Tabelle
 assistant serve                  # API auf :8080 (ab Phase 2)
 cd dashboard && streamlit run app.py   # Dashboard auf :8501 (ab Phase 4, braucht die API)
+cd obsidian-plugin && npm ci && npm test && npm run build   # Plugin (ab Phase 5)
 ```
 
 ## Claude-Code-Hooks

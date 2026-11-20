@@ -102,6 +102,10 @@ Ohne Docker: `pip install -e ".[dashboard]"`, API mit `assistant serve` starten,
 
 ![Dashboard dunkel: Inbox mit Gaming-Schutz und letzten Läufen](docs/bilder/dashboard-inbox-dunkel.png)
 
+## Obsidian-Plugin
+
+Die Suche direkt in Obsidian: Seitenleiste „Vault-Assistent“ mit Fragen, „Nur suchen“ und dem Befehl „Ähnliche Notizen zur aktuellen Notiz“. Quellen sind `[[Wikilink]]`-Chips und springen zum passenden Abschnitt. Das Plugin ruft nur die API auf (Heimnetz oder Tailscale), über Obsidians `requestUrl`, und nutzt nur Obsidians CSS-Variablen. Bauen, Testen und Installieren: [`obsidian-plugin/README.md`](obsidian-plugin/README.md).
+
 ## Nachtjob
 
 Jede Nacht (Standard 03:00) arbeitet der Nachtjob die Notizen in `00 Inbox` ab:
