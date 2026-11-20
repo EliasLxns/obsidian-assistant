@@ -11,6 +11,14 @@ Ein lokaler RAG-Assistent für einen Obsidian-Vault. Er beantwortet Fragen an di
 - „Frage:“-Notizen aus der Inbox über Nacht beantworten
 - Dashboard mit Suche, Inbox-Status, Vault-Statistik und Systemstatus
 
+## Demo-Video
+
+_Folgt in Kürze._ Rund 2:30 Minuten mit dem Demo-Vault: eine Frage mit Quellen im Dashboard, das Obsidian-Plugin, ein Nachtlauf, der die Inbox sortiert, und das Dashboard. Drehbuch und Aufnahme-Checkliste: [docs/demo-video/](docs/demo-video/drehbuch.md).
+
+<!-- Nach dem Hochladen ersetzen durch:
+[![Demo-Video: Obsidian-Assistent in 2:30 Minuten](docs/bilder/demo-video.png)](<Link zum Video>)
+-->
+
 ## Architektur
 
 ```
