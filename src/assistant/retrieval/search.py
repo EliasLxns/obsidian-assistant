@@ -65,7 +65,8 @@ class Retriever:
     """``modus`` gilt für ``search`` und ``search_notes``.
 
     ``score`` hängt vom Modus ab: Kosinus (vektor), BM25-Wert (bm25) oder RRF-Wert (hybrid).
-    Wer eine feste Schwelle braucht (Nachtjob: Links erst ab Kosinus 0,3), nutzt ``vektor``.
+    Wer eine feste Schwelle braucht (Nachtjob: Links ab Kosinus 0,5, siehe ``Optionen``),
+    nutzt ``vektor``.
 
     ``erreichbar`` (z. B. ``ollama_reachable`` mit 2 s Timeout) prüft vor der Vektorsuche, ob
     Ollama antwortet. Ohne die Prüfung würde ``hybrid`` bei schlafendem PC erst nach dem vollen

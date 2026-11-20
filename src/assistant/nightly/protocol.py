@@ -46,6 +46,7 @@ class Lauf:
     geweckt: bool = False  # nur dann darf der Nachtjob den PC danach ausschalten
     git_vorher: str | None = None
     git_nachher: str | None = None
+    rueckgaengig: str = ""  # Zeitpunkt, zu dem der Lauf zurückgenommen wurde
     hinweise: list[str] = field(default_factory=list[str])
     aktionen: list[Aktion] = field(default_factory=list[Aktion])
 
@@ -124,16 +125,22 @@ def schreiben(datei: Path, text: str) -> None:
 
 
 def wie_original(neu: str, original: str) -> str:
-    """Übernimmt die Zeilenenden des Originals (CRLF aus Windows-Notizen bleibt CRLF)."""
-    lf = neu.replace("\r\n", "\n")
-    return lf.replace("\n", "\r\n") if "\r\n" in original else lf
+    """Übernimmt die Zeilenenden des Originals: CRLF nur, wenn das Original durchgehend CRLF
+    hat. Bei gemischten Zeilenenden bleibt der Text, wie er ist."""
+    crlf = original.count("\r\n")
+    if crlf and crlf == original.count("\n"):
+        return neu.replace("\r\n", "\n").replace("\n", "\r\n")
+    if not crlf:
+        return neu.replace("\r\n", "\n")
+    return neu
 
 
 def rueckgaengig(vault: Path, lauf: Lauf, protokoll: Path | None = None) -> list[str]:
     """Stellt die Notizen eines Laufs wieder her. Gibt eine Zeile je Notiz zurück.
 
     ``protokoll``: die Protokoll-Notiz des Laufs. Sie wird gelöscht, wenn alles zurückgenommen
-    ist; sonst bekommt sie einen Vermerk, was übersprungen wurde.
+    ist; sonst bekommt sie einen Vermerk, was übersprungen wurde. Wurde gar nichts
+    wiederhergestellt (z. B. ein Lauf mit nur Fehlern), bleibt sie unverändert.
     """
     meldungen: list[str] = []
     for a in reversed(lauf.aktionen):
@@ -153,7 +160,8 @@ def rueckgaengig(vault: Path, lauf: Lauf, protokoll: Path | None = None) -> list
         if ziel != quelle:
             ziel.unlink()
         meldungen.append(f"Wiederhergestellt: {a.quelle}")
-    if protokoll is not None and protokoll.is_file():
+    wiederhergestellt = any(m.startswith("Wiederhergestellt") for m in meldungen)
+    if protokoll is not None and protokoll.is_file() and wiederhergestellt:
         uebersprungen = [m for m in meldungen if m.startswith("Übersprungen")]
         if uebersprungen:
             vermerk = "\n## Rückgängig\n\n" + "".join(f"- {m}\n" for m in meldungen)

@@ -161,7 +161,9 @@ def _ablauf(
         rel = datei.relative_to(vault).as_posix()
         try:
             text = lesen(datei)
-            note = parse_markdown(text, rel)
+            # Zum Lesen alle Zeilenenden vereinheitlichen (auch altes Mac-CR); geschrieben wird
+            # später mit den Zeilenenden des Originals.
+            note = parse_markdown(text.replace("\r\n", "\n").replace("\r", "\n"), rel)
             if inbox.ist_frage(note):
                 ergebnis = _frage(note, text, rel, retriever, c, namen, jetzt, s.inbox_dir)
             else:

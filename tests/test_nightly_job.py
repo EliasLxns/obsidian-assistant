@@ -309,3 +309,46 @@ def test_cli_ausserhalb_des_fensters(vault: Path, tmp_path: Path) -> None:
     )
     assert main(["nightly"], app) == 0
     assert protocol.alle_laeufe(tmp_path / "state") == []
+
+
+def test_cli_rueckgaengig_nur_einmal_und_nur_eigene_pfade(
+    vault: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state = tmp_path / "state"
+    app = FakeApp(vault, state)
+    lauf = _lauf(_components(vault, state), vault)
+    eigene = vault / "03 Wissen/Laufen/Pulszonen.md"
+    eigene.write_text(eigene.read_text(encoding="utf-8") + "\nNeuer Gedanke.\n", encoding="utf-8")
+
+    assert main(["nightly", "rueckgaengig"], app) == 0
+    capsys.readouterr()
+    # Die eigene Änderung ist nicht im Rückgängig-Commit gelandet
+    status = subprocess.run(
+        ["git", "-c", "safe.directory=*", "status", "--porcelain"],
+        cwd=vault,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert "Pulszonen.md" in status
+
+    assert main(["nightly", "rueckgaengig", lauf.id], app) == 0
+    assert "schon am" in capsys.readouterr().out
+    assert main(["nightly", "rueckgaengig"], app) == 1  # kein offener Lauf mehr
+
+
+def test_rueckgaengig_ohne_wiederherstellung_behaelt_protokoll(vault: Path, tmp_path: Path) -> None:
+    md = vault / "00 Inbox/Protokoll/Nachtjob x.md"
+    protocol.schreiben(md, "# Nachtlauf x\n")
+    lauf = protocol.Lauf(
+        id="x", start="", aktionen=[protocol.Aktion("fehler", IDEE, details="weg")]
+    )
+    assert protocol.rueckgaengig(vault, lauf, protokoll=md) == []
+    assert md.read_text(encoding="utf-8") == "# Nachtlauf x\n"
+
+
+def test_gemischte_zeilenenden_bleiben_gemischt() -> None:
+    original = "a\r\nb\nc\n"
+    assert protocol.wie_original("a\r\nb\nc\nneu\n", original) == "a\r\nb\nc\nneu\n"
+    assert protocol.wie_original("a\nb\n", "a\r\nb\r\n") == "a\r\nb\r\n"
+    assert protocol.wie_original("a\r\nb\n", "a\nb\n") == "a\nb\n"

@@ -89,9 +89,16 @@ def _hits(*pfade: str) -> list[Hit]:
 
 def test_nur_zitierte_quellen_neu_nummeriert() -> None:
     hits = _hits("a.md", "b.md", "c.md", "d.md")
-    text, quellen = nur_zitierte("Erst C [3]. Dann A [1][3]. Falsch [9].", hits)
-    assert text == "Erst C [1]. Dann A [2][1]. Falsch ."
+    text, quellen = nur_zitierte("Erst C [3]. Dann A [1][3]. Code `werte[0]`, Jahr [2026].", hits)
+    assert text == "Erst C [1]. Dann A [2][1]. Code `werte[0]`, Jahr [2026]."
     assert [h.chunk.path for h in quellen] == ["c.md", "a.md"]
+
+
+def test_nur_zitierte_mit_komma_und_bereich() -> None:
+    hits = _hits("a.md", "b.md", "c.md", "d.md")
+    text, quellen = nur_zitierte("Port [2, 4]. Dienst [1–2].", hits)
+    assert text == "Port [1][2]. Dienst [3][1]."
+    assert [h.chunk.path for h in quellen] == ["b.md", "d.md", "a.md"]
 
 
 def test_ohne_zitate_bleiben_alle_quellen() -> None:

@@ -385,7 +385,8 @@ def _rueckgaengig(vault: Path, state: Path, lauf_id: str | None, inbox_dir: str)
         # Neuester echter Lauf, der etwas geändert hat (leere oder abgebrochene zählen nicht)
         for datei in reversed(alle_laeufe(state)):
             kandidat = protocol.laden(datei)
-            if not kandidat.probelauf and any(a.art != "fehler" for a in kandidat.aktionen):
+            erledigt = kandidat.probelauf or kandidat.rueckgaengig
+            if not erledigt and any(a.art != "fehler" for a in kandidat.aktionen):
                 lauf = kandidat
                 break
     if lauf is None:
@@ -394,13 +395,21 @@ def _rueckgaengig(vault: Path, state: Path, lauf_id: str | None, inbox_dir: str)
     if lauf.probelauf:
         print(f"Lauf {lauf.id} war ein Probelauf, es gibt nichts zurückzunehmen.")
         return 0
+    if lauf.rueckgaengig:
+        print(f"Lauf {lauf.id} wurde schon am {lauf.rueckgaengig} rückgängig gemacht.")
+        return 0
     md = vault / inbox_dir / PROTOKOLL / f"Nachtjob {lauf.id}.md"
     for zeile in protocol.rueckgaengig(vault, lauf, protokoll=md):
         print(zeile)
+    lauf.rueckgaengig = datetime.now().isoformat(timespec="seconds")
+    protocol.speichern(state, lauf)
     git = VaultGit(vault)
     if git.ist_repo():
+        # Nur, was der Lauf angefasst hat: eigene Änderungen im Vault bleiben uncommittet.
+        pfade = {p for a in lauf.aktionen for p in (a.quelle, a.ziel) if p}
+        pfade.add(md.relative_to(vault).as_posix())
         try:
-            if git.commit(f"Nachtjob: Lauf {lauf.id} rückgängig"):
+            if git.commit(f"Nachtjob: Lauf {lauf.id} rückgängig", sorted(pfade)):
                 print("Git-Commit erstellt.")
         except GitError as e:
             print(f"Git-Commit fehlgeschlagen: {e}", file=sys.stderr)

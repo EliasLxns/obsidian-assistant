@@ -57,10 +57,22 @@ class VaultGit:
         self._git("init", "--quiet")
         return True
 
-    def commit(self, nachricht: str) -> str | None:
-        """Alles committen. Gibt den Commit-Hash zurück, ``None`` wenn sich nichts geändert hat."""
-        self._git("add", "--all")
-        if not self._git("status", "--porcelain"):
-            return None
-        self._git("commit", "--quiet", "--no-verify", "-m", nachricht)
+    def commit(self, nachricht: str, pfade: list[str] | None = None) -> str | None:
+        """Alles committen, oder nur ``pfade`` (relativ zum Vault, auch gelöschte).
+
+        Gibt den Commit-Hash zurück, ``None`` wenn sich nichts geändert hat.
+        """
+        if pfade is None:
+            self._git("add", "--all")
+            if not self._git("status", "--porcelain"):
+                return None
+            self._git("commit", "--quiet", "--no-verify", "-m", nachricht)
+        else:
+            if not pfade:
+                return None
+            self._git("add", "--all", "--", *pfade)
+            if not self._git("diff", "--cached", "--name-only", "--", *pfade):
+                return None
+            # Nur diese Pfade: eigene Änderungen anderswo im Vault bleiben außen vor.
+            self._git("commit", "--quiet", "--no-verify", "-m", nachricht, "--", *pfade)
         return self._git("rev-parse", "HEAD")
