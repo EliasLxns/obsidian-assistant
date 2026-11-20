@@ -52,3 +52,31 @@ assistant eval --modus vektor --details
 assistant eval --modus hybrid --details
 assistant eval --modus bm25 --details   # läuft auch ohne Ollama
 ```
+
+## Lauf 3: Link-Erweiterung (21.11.2026)
+
+Gleiche Umgebung. Die Link-Erweiterung setzt Notizen, auf die die besten drei Treffer per Wikilink verweisen, direkt hinter diese drei (siehe `retrieval/links.py`). Die ersten Plätze ändern sich dadurch nie.
+
+Zuerst probiert: die verlinkten Notizen als dritte Rangliste in die RRF-Fusion geben. Das hat mit BM25 Treffer@1 von 65 % auf 45 % gedrückt, weil schon kleine Zusatzpunkte die knappen Abstände der ersten Plätze umdrehen. Deshalb das Einfügen hinter den besten Treffern.
+
+Das Eval-Set hat drei neue Fragen vom Typ `verlinkt`: Die zweite Notiz ist über einen Wikilink der ersten erreichbar (`tests/test_demo_vault.py` prüft den Link).
+
+| Suche | Fragen | Treffer@1 | Treffer@5 | mehrere (5) @5 |
+|---|---:|---:|---:|---:|
+| hybrid (bge-m3) | 20 | 100 % | 100 % | 100 % |
+| hybrid + Links (bge-m3) | 20 | 100 % | 100 % | 100 % |
+| bm25 | 23 | 65 % | 87 % | 80 % |
+| **bm25 + Links** | 23 | **65 %** | **91 %** | **100 %** |
+
+### Einordnung
+
+- **Die Link-Erweiterung ist ab jetzt an** (`LINK_EXPANSION=true`). Mit Hybrid ändert sie auf diesem Set nichts, es ist schon bei 100 %. Im Rückfall ohne Ollama findet sie die zweite Notiz bei „Knieprobleme und harte Einheiten“ (Läuferknie → Intervalltraining), die BM25 allein verpasst.
+- Die drei `verlinkt`-Fragen findet BM25 auch ohne Links, weil sie gemeinsame Wörter enthalten. Mit bge-m3 sind sie noch nicht gemessen; das holt der nächste Lauf auf dem Gaming-PC nach.
+- Der eigentliche Nutzen liegt bei echten Vaults: Dort verlinkt man Zusammenhänge, deren Notizen sich im Wortlaut wenig ähneln.
+
+### Nachvollziehen (Lauf 3)
+
+```bash
+assistant eval --modus hybrid --details   # LINK_EXPANSION=true ist Standard
+assistant eval --modus bm25 --details   # ohne Ollama; --no-links schaltet die Links ab
+```

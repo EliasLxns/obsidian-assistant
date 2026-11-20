@@ -14,7 +14,7 @@ Regeln:
   dazu, auch wenn sie plausibel klingen.
 - Belege jeden Satz mit der Nummer der Quelle in eckigen Klammern, z. B. [1] oder [2][3].
   Nenne nur Quellen, in denen die Aussage wirklich steht.
-- Jede Information nur einmal.
+- Jede Information nur einmal. Keine Nachsätze wie „wie in den Notizen belegt“.
 - Steht die Antwort nicht in den Notizen, sage das ehrlich."""
 
 

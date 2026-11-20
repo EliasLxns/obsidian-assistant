@@ -87,6 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=SUCHMODI,
         help="Suchmodus (Standard: SEARCH_MODE aus .env, sonst hybrid); bm25 läuft ohne Ollama",
     )
+    p_eval.add_argument(
+        "--links",
+        action=argparse.BooleanOptionalAction,
+        help="Link-Erweiterung an/aus (Standard: LINK_EXPANSION aus .env; nur bm25 und hybrid)",
+    )
     p_eval.add_argument("--details", action="store_true", help="Ergebnis je Frage zeigen")
     p_eval.add_argument("--ausgabe", help="Ergebnis zusätzlich als Markdown-Datei speichern")
 
@@ -150,7 +155,11 @@ def _cmd_ask(args: argparse.Namespace, c: Components) -> int:
         return 1
     s = c.settings
     retriever = Retriever(
-        c.embedder, c.store, modus=s.suchmodus, erreichbar=lambda: ollama_reachable(s.ollama_url)
+        c.embedder,
+        c.store,
+        modus=s.suchmodus,
+        erreichbar=lambda: ollama_reachable(s.ollama_url),
+        link_erweiterung=s.link_erweiterung,
     )
     vault_name = s.vault_name
     if args.nur_suche:
@@ -186,12 +195,14 @@ def _cmd_eval(args: argparse.Namespace, c: Components) -> int:
     )
     fragen = load_questions(Path(args.fragen))
     # Ohne Rückfall: Ist Ollama weg, scheitert der Eval, statt still nur BM25 zu messen.
-    retriever = Retriever(embedder, store, modus=modus, rueckfall=False)
+    mit_links = c.settings.link_erweiterung if args.links is None else args.links
+    retriever = Retriever(embedder, store, modus=modus, rueckfall=False, link_erweiterung=mit_links)
     ergebnis = evaluate(retriever, fragen, args.k)
 
     modell = "ohne Embeddings" if modus == "bm25" else f"Modell {embedder.model_name}"
+    suche = f"{modus} + Links" if mit_links and modus != "vektor" else modus
     kopf = (
-        f"Eval: {len(fragen)} Fragen, Suche {modus}, {modell}, "
+        f"Eval: {len(fragen)} Fragen, Suche {suche}, {modell}, "
         f"Chunks max. {args.max_zeichen} Zeichen / Überlappung {args.ueberlappung}"
     )
     teile = [kopf, "", format_table(ergebnis)]

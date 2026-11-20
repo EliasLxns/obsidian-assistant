@@ -60,16 +60,16 @@ def test_treffer_bei_mehreren_notizen() -> None:
 
 def test_eval_set_laden() -> None:
     fragen = load_questions(QUESTIONS)
-    assert len(fragen) == 20
-    assert {f.typ for f in fragen} == {"exakt", "umschreibung", "mehrere"}
-    assert all(len(f.erwartet) >= 2 for f in fragen if f.typ == "mehrere")
+    assert len(fragen) == 23
+    assert {f.typ for f in fragen} == {"exakt", "umschreibung", "mehrere", "verlinkt"}
+    assert all(len(f.erwartet) >= 2 for f in fragen if f.typ in {"mehrere", "verlinkt"})
 
 
 def test_eval_mit_fake_embedder(embedder: FakeEmbedder, demo_store: InMemoryStore) -> None:
     ergebnis = evaluate(Retriever(embedder, demo_store), load_questions(QUESTIONS), k=5)
     # Der FakeEmbedder kennt nur gleiche Wörter: exakte Begriffe muss er trotzdem finden.
     assert ergebnis.rate(5, "exakt") == 1.0
-    assert "| **gesamt** | 20 |" in format_table(ergebnis)
+    assert "| **gesamt** | 23 |" in format_table(ergebnis)
 
 
 def test_eval_set_unbekannter_typ(tmp_path: Path) -> None:

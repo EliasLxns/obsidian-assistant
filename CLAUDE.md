@@ -114,7 +114,7 @@ Fehlt `ruff`, `pyright` oder `pytest`, überspringen die Hooks still. Deshalb zu
 ```yaml
 - frage: "Wie starte ich meine Container?"
   erwartet: "03 Wissen/Docker/Compose.md"
-  typ: umschreibung        # exakt | umschreibung | mehrere
+  typ: umschreibung        # exakt | umschreibung | mehrere | verlinkt
 ```
 
-Bei `typ: mehrere` ist `erwartet` eine Liste. Wird der Demo-Vault geändert, prüft `tests/test_demo_vault.py`, dass alle erwarteten Notizen und Wikilinks noch existieren.
+Bei `typ: mehrere` und `verlinkt` ist `erwartet` eine Liste (bei `verlinkt` verlinkt die erste Notiz auf die zweite). Wird der Demo-Vault geändert, prüft `tests/test_demo_vault.py`, dass alle erwarteten Notizen und Wikilinks noch existieren.

@@ -22,10 +22,13 @@ from assistant.nightly.guard import (
 )
 from assistant.nightly.inbox import (
     SORT_SYSTEM,
+    Entscheidung,
     build_sort_prompt,
     inbox_notes,
     ist_frage,
+    mit_thema,
     notiz_ergaenzen,
+    ordner_themen,
     parse_entscheidung,
     verwandte_notizen,
     vorhandene_tags,
@@ -316,3 +319,18 @@ def test_vorhandene_tags_fuer_den_prompt() -> None:
     prompt = build_sort_prompt(note, "# Neu\n\nText", {"03 Wissen/Garten": ["Tomaten"]}, [], tags)
     assert f"Vorhandene Tags: {tags[0]}" in prompt
     assert "ä, ö, ü" in SORT_SYSTEM
+
+
+def test_thema_des_zielordners_kommt_dazu() -> None:
+    themen = ordner_themen(DEMO_VAULT, "00 Inbox")
+    assert themen["03 Wissen/Garten"] == "garten"
+    e = Entscheidung("03 Wissen/Garten", ("hochbeet", "sensor"), True, "")
+    assert mit_thema(e, themen).tags == ("garten", "hochbeet", "sensor")
+    assert mit_thema(Entscheidung("03 Wissen/Garten", ("garten",), True, ""), themen).tags == (
+        "garten",
+    )
+    voll = Entscheidung("03 Wissen/Garten", ("a", "b", "c", "d"), True, "")
+    assert mit_thema(voll, themen).tags == ("garten", "a", "b", "c")  # höchstens 4
+    assert mit_thema(Entscheidung(None, ("a",), False, ""), themen).tags == ("a",)
+    # Trägt die Notiz den Tag schon (auch groß geschrieben), fällt kein Modell-Tag weg
+    assert mit_thema(voll, themen, ["Garten"]).tags == ("a", "b", "c", "d")

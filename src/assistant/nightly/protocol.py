@@ -12,6 +12,7 @@ gehen nie verloren.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
@@ -169,4 +170,9 @@ def rueckgaengig(vault: Path, lauf: Lauf, protokoll: Path | None = None) -> list
         else:
             protokoll.unlink()
             meldungen.append(f"Protokoll entfernt: {protokoll.name}")
+            # Leeren Ordner nicht in Obsidian liegen lassen. Legt Sync gerade etwas hinein,
+            # bleibt er eben stehen.
+            with contextlib.suppress(OSError):
+                if not any(protokoll.parent.iterdir()):
+                    protokoll.parent.rmdir()
     return meldungen

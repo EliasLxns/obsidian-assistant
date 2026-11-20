@@ -48,7 +48,7 @@ class OllamaLLM:
         base_url: str,
         model: str,
         *,
-        temperature: float = 0.2,
+        temperature: float = 0.0,  # gleiche Frage, gleiche Antwort (Probelauf = echter Lauf)
         timeout_s: float = 120.0,
         client: httpx.Client | None = None,
     ) -> None:

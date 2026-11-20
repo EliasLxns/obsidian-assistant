@@ -1,7 +1,8 @@
 # Eval-Set für den Demo-Vault.
 # Pfade in "erwartet" sind relativ zu demo_vault/.
 # typ: exakt = exakter Begriff aus der Notiz, umschreibung = mit anderen Worten,
-#      mehrere = Antwort braucht mehrere Notizen (erwartet ist dann eine Liste).
+#      mehrere = Antwort braucht mehrere Notizen (erwartet ist dann eine Liste),
+#      verlinkt = wie mehrere, die zweite Notiz ist über einen Wikilink der ersten erreichbar.
 # Treffer@k zählt, wenn die erwartete Notiz unter den ersten k Notizen ist. Bei "mehrere" müssen
 # so viele erwartete Notizen unter den ersten k sein, wie hineinpassen (Treffer@1: eine, Treffer@5: alle).
 
@@ -97,3 +98,22 @@
     - "03 Wissen/Laufen/Läuferknie.md"
     - "03 Wissen/Laufen/Intervalltraining.md"
   typ: mehrere
+
+# --- Verlinkt: die zweite Notiz ist vor allem über einen Wikilink der ersten erreichbar ---
+- frage: "Welche Schuhe hatte ich beim Stadtlauf an, und nach wie vielen Kilometern sollte ich sie ersetzen?"
+  erwartet:
+    - "03 Wissen/Laufen/Stadtlauf 2026.md"
+    - "03 Wissen/Laufen/Laufschuhe.md"
+  typ: verlinkt
+
+- frage: "Wann habe ich beim Stadtlauf ein Gel genommen, und wie oft hatte ich das eigentlich geplant?"
+  erwartet:
+    - "03 Wissen/Laufen/Stadtlauf 2026.md"
+    - "03 Wissen/Laufen/Ernährung vor dem Lauf.md"
+  typ: verlinkt
+
+- frage: "Was kommt in die unterste Zone meiner Kräuterspirale, und wie setze ich das an?"
+  erwartet:
+    - "03 Wissen/Garten/Kräuterspirale.md"
+    - "03 Wissen/Garten/Kompost.md"
+  typ: verlinkt

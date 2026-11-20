@@ -21,7 +21,9 @@ from typing import Literal
 
 from assistant.index.embedder import Embedder, OllamaError
 from assistant.index.store import Hit, VectorStore
+from assistant.retrieval import links
 from assistant.retrieval.bm25 import Bm25
+from assistant.retrieval.links import LinkGraph
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +74,9 @@ class Retriever:
     Ollama antwortet. Ohne die Prüfung würde ``hybrid`` bei schlafendem PC erst nach dem vollen
     Ollama-Timeout auf BM25 zurückfallen. Das Ergebnis gilt ``pruef_intervall_s`` Sekunden.
     ``rueckfall=False`` (Eval) lässt ``hybrid`` scheitern, statt still nur BM25 zu messen.
+    ``link_erweiterung`` nimmt in ``bm25`` und ``hybrid`` die Notizen dazu, auf die die besten
+    Treffer verlinken (siehe ``links.py``). In ``vektor`` bleibt sie aus, damit ``score`` der
+    Kosinus bleibt.
     """
 
     def __init__(
@@ -83,6 +88,7 @@ class Retriever:
         modus: str = "vektor",
         erreichbar: Callable[[], bool] | None = None,
         rueckfall: bool = True,
+        link_erweiterung: bool = False,
         pruef_intervall_s: float = 30.0,
         bm25_max_alter_s: float = 60.0,
         uhr: Callable[[], float] = time.monotonic,
@@ -92,15 +98,20 @@ class Retriever:
         self.oversample = oversample
         self.modus = suchmodus(modus)
         self.rueckfall = rueckfall
+        self.link_erweiterung = link_erweiterung
         self._erreichbar = erreichbar
         self._pruef_intervall_s = pruef_intervall_s
         self._bm25_max_alter_s = bm25_max_alter_s
         self._uhr = uhr
         self._sperre = threading.Lock()
         self._ping: tuple[float, bool] | None = None  # (Zeitpunkt, Ergebnis)
-        self._bm25: tuple[float, int, Bm25] | None = None  # (gebaut um, Anzahl Chunks, Index)
+        # (gebaut um, Anzahl Chunks, BM25, Link-Graph)
+        self._bm25: tuple[float, int, Bm25, LinkGraph] | None = None
 
     def _bm25_index(self) -> Bm25:
+        return self._indizes()[0]
+
+    def _indizes(self) -> tuple[Bm25, LinkGraph]:
         """BM25 über alle Chunks im Store.
 
         Neu gebaut, wenn sich die Anzahl der Chunks ändert oder der Index älter als
@@ -111,10 +122,11 @@ class Retriever:
         with self._sperre:  # eine Instanz bedient mehrere API-Threads
             cache = self._bm25
             if cache and cache[1] == anzahl and jetzt - cache[0] < self._bm25_max_alter_s:
-                return cache[2]
-            index = Bm25(self.store.alle_chunks())
-            self._bm25 = (jetzt, anzahl, index)
-            return index
+                return cache[2], cache[3]
+            chunks = self.store.alle_chunks()
+            index, graph = Bm25(chunks), LinkGraph(chunks)
+            self._bm25 = (jetzt, anzahl, index, graph)
+            return index, graph
 
     def _ollama_da(self) -> bool:
         if self._erreichbar is None:
@@ -130,25 +142,27 @@ class Retriever:
 
     def _treffer(self, query: str, n: int) -> tuple[list[Hit], Suchmodus]:
         """Treffer und der Modus, mit dem tatsächlich gesucht wurde."""
-        if self.modus == "bm25":
-            return self._bm25_index().search(query, n), "bm25"
         if self.modus == "vektor":
             return self.store.query(self.embedder.embed_query(query), n), "vektor"
-        stichwort = self._bm25_index().search(query, n)
-        if not self.rueckfall:
-            return rrf(self.store.query(self.embedder.embed_query(query), n), stichwort)[
-                :n
-            ], "hybrid"
-        if not self._ollama_da():
-            return stichwort, "bm25"
-        try:
-            vektor = self.store.query(self.embedder.embed_query(query), n)
-        except OllamaError as e:
-            log.warning("Ollama nicht erreichbar, suche nur mit BM25: %s", e)
-            with self._sperre:
-                self._ping = (self._uhr(), False)
-            return stichwort, "bm25"
-        return rrf(vektor, stichwort)[:n], "hybrid"
+        bm25, graph = self._indizes()
+        stichwort = bm25.search(query, n)
+        vektor: list[Hit] | None = None
+        if self.modus == "hybrid":
+            if not self.rueckfall:
+                vektor = self.store.query(self.embedder.embed_query(query), n)
+            elif self._ollama_da():
+                try:
+                    vektor = self.store.query(self.embedder.embed_query(query), n)
+                except OllamaError as e:
+                    log.warning("Ollama nicht erreichbar, suche nur mit BM25: %s", e)
+                    with self._sperre:
+                        self._ping = (self._uhr(), False)
+        listen = [stichwort] if vektor is None else [vektor, stichwort]
+        modus: Suchmodus = "bm25" if vektor is None else "hybrid"
+        if not self.link_erweiterung:
+            return (stichwort if vektor is None else rrf(*listen)[:n]), modus
+        basis = stichwort if vektor is None else rrf(*listen)
+        return links.einfuegen(basis, graph.verlinkt(basis, stichwort))[:n], modus
 
     def search(self, query: str, k: int = 5) -> list[Hit]:
         """Die ``k`` besten Chunks."""

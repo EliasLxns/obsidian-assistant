@@ -200,7 +200,13 @@ def create_app(
     c = components
     s = c.settings
     pruefe_ollama = ping or (lambda: ollama_reachable(s.ollama_url))
-    retriever = Retriever(c.embedder, c.store, modus=s.suchmodus, erreichbar=pruefe_ollama)
+    retriever = Retriever(
+        c.embedder,
+        c.store,
+        modus=s.suchmodus,
+        erreichbar=pruefe_ollama,
+        link_erweiterung=s.link_erweiterung,
+    )
     index_sperre = threading.Lock()  # nie zwei Indexläufe gleichzeitig
     letzter: list[IndexlaufOut] = []
 

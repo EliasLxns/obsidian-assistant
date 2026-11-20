@@ -36,7 +36,7 @@ from assistant.retrieval.search import Retriever
 
 PRUEFEN = "Prüfen"
 PROTOKOLL = "Protokoll"
-MAX_TAGS = 5
+MAX_TAGS = 4
 MAX_ZEICHEN_IM_PROMPT = 3000
 _TAG_ERLAUBT = re.compile(r"[^\w/-]+")
 
@@ -142,13 +142,57 @@ def vorhandene_tags(
     return [t for t, _ in zaehler.most_common(maximal)]
 
 
+def ordner_themen(
+    vault: Path, inbox_dir: str, dateien: Sequence[Path] | None = None
+) -> dict[str, str]:
+    """Ordner → Tag, den mindestens die Hälfte seiner Notizen trägt (z. B. ``garten``).
+
+    Bezogen auf den obersten Themenordner (``03 Wissen/Garten``), damit auch Unterordner
+    ihn erben. Ohne klaren Tag fehlt der Ordner im Ergebnis.
+    """
+    zaehler: dict[str, Counter[str]] = {}
+    anzahl: Counter[str] = Counter()
+    for datei in iter_notes(vault) if dateien is None else dateien:
+        rel = datei.relative_to(vault)
+        if len(rel.parts) < 2 or rel.parts[0] == inbox_dir:
+            continue
+        ordner = "/".join(rel.parts[:2]) if len(rel.parts) > 2 else rel.parts[0]
+        try:
+            text = datei.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        anzahl[ordner] += 1
+        zaehler.setdefault(ordner, Counter()).update(
+            {t.lower() for t in parse_markdown(text, rel.as_posix()).tags}
+        )
+    themen: dict[str, str] = {}
+    for ordner, tags in zaehler.items():
+        if tags and (bester := tags.most_common(1)[0])[1] * 2 >= anzahl[ordner]:
+            themen[ordner] = bester[0]
+    return themen
+
+
+def mit_thema(
+    e: Entscheidung, themen: dict[str, str], vorhanden: Sequence[str] = ()
+) -> Entscheidung:
+    """Setzt den Thementag des Zielordners an den Anfang, falls weder das Modell ihn vergeben
+    hat noch die Notiz ihn schon trägt (``vorhanden``, ohne Groß/klein)."""
+    if not e.ordner:
+        return e
+    thema = themen.get("/".join(e.ordner.split("/")[:2]))
+    schon = {t.casefold() for t in (*e.tags, *vorhanden)}
+    if not thema or thema.casefold() in schon:
+        return e
+    return Entscheidung(e.ordner, (thema, *e.tags)[:MAX_TAGS], e.sicher, e.grund)
+
+
 SORT_SYSTEM = """Du sortierst neue Notizen in einen Obsidian-Vault ein.
 Antworte nur mit einem JSON-Objekt:
 {"ordner": "<einer der vorgegebenen Ordner oder null>", "tags": ["..."], "sicher": true|false,
  "grund": "<ein kurzer Satz auf Deutsch>"}
 Regeln:
 - Wähle genau einen Ordner aus der Liste. Erfinde keine Ordner.
-- 1 bis 5 Tags, kleingeschrieben, ohne #, ohne Leerzeichen (Bindestrich statt Leerzeichen).
+- 1 bis 4 Tags, kleingeschrieben, ohne #, ohne Leerzeichen (Bindestrich statt Leerzeichen).
 - Nimm vorhandene Tags aus der Liste, wenn sie passen. Neue Tags nur, wenn keiner passt.
 - Schreibe Umlaute als ä, ö, ü und ß (also "bewässerung", nicht "bewaesserung").
 - "sicher" nur, wenn die Notiz eindeutig zu dem Ordner passt. Sonst false."""
