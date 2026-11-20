@@ -1,5 +1,7 @@
 """BM25, Reciprocal Rank Fusion und die Suchmodi des Retrievers (Phase 5)."""
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -116,7 +118,7 @@ def test_unbekannter_modus() -> None:
 
 def test_suchmodus_aus_env() -> None:
     assert load_settings(environ={"SEARCH_MODE": " Hybrid "}).suchmodus == "hybrid"
-    assert load_settings(environ={}).suchmodus == "vektor"
+    assert load_settings(environ={}, env_file=Path("fehlt.env")).suchmodus == "hybrid"
 
 
 def test_api_search_ohne_ollama(demo_store: InMemoryStore, tmp_path: object) -> None:

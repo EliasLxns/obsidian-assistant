@@ -25,7 +25,7 @@ class Settings:
     timeout_s: float = 120.0
     chroma_host: str = ""  # leer: lokale Chroma-Datei unter chroma_path, sonst HTTP (Docker)
     chroma_port: int = 8000
-    suchmodus: str = "vektor"  # vektor | bm25 | hybrid (für /ask, /search, ask)
+    suchmodus: str = "hybrid"  # vektor | bm25 | hybrid (für /ask, /search, ask)
     watch_polling: bool = False  # Watcher fragt ab statt inotify (Docker Desktop unter Windows)
     # Nachtjob (Phase 3)
     inbox_dir: str = "00 Inbox"

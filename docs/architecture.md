@@ -32,7 +32,7 @@ flowchart LR
 ## Datenfluss einer Frage
 
 1. Plugin oder Dashboard schickt die Frage an `/ask`.
-2. Der Retriever kombiniert BM25 und Vektorsuche und ergänzt verlinkte Notizen.
+2. Der Retriever kombiniert BM25 und Vektorsuche (Reciprocal Rank Fusion). Verlinkte Notizen zu ergänzen folgt in Phase 5.
 3. Die besten Chunks gehen mit einem Prompt an das Chat-Modell in Ollama.
 4. Die Antwort kommt mit Quellen als `obsidian://`-Links zurück.
 
@@ -144,3 +144,20 @@ Das Plugin ist ein zweites Frontend neben dem Dashboard und nutzt dieselben Endp
 - **Testbar ohne Obsidian:** Der API-Client bekommt die HTTP-Funktion hineingereicht, Textfunktionen und Einstellungen liegen in eigenen Dateien ohne Obsidian-Import. `vitest` testet sie ohne Obsidian und ohne API.
 - **Ähnliche Notizen** brauchen keinen neuen Endpunkt: Titel und Anfang der aktiven Notiz (ohne Frontmatter, Code und Markdown-Zeichen) gehen als Suchtext an `/search`. `/search` liefert schon je Notiz den besten Abschnitt. Das Plugin holt einen Treffer mehr und lässt die Notiz selbst weg.
 - **Quellen öffnen per `openLinkText`** mit `Pfad#Überschrift`, also wie ein normaler Wikilink: Strg/Cmd-Klick öffnet einen neuen Tab.
+
+### Hybrid-Suche
+
+```mermaid
+flowchart LR
+    Q[Frage] --> E[bge-m3<br/>Ollama] --> V[Vektorsuche<br/>Chroma]
+    Q --> B[BM25<br/>im Speicher]
+    V --> R[RRF<br/>1 / 60 + Platz]
+    B --> R
+    R --> T[beste Chunks]
+```
+
+- **Warum BM25?** Vektoren finden Umschreibungen, verfehlen aber manchmal seltene exakte Begriffe (`ITBS`, `11434`). BM25 zählt genau diese Begriffe und gewichtet seltene stärker. Eigene Umsetzung in `retrieval/bm25.py`, mit deutschen Stoppwörtern und grobem Kürzen von Endungen.
+- **Warum RRF?** Kosinus-Werte (0 bis 1) und BM25-Werte (offen nach oben) lassen sich nicht direkt addieren. RRF nutzt nur die Plätze.
+- **Rückfall:** Ist Ollama nicht erreichbar, sucht `hybrid` nur mit BM25 weiter. `/search` meldet das im Feld `modus`. Die Suche geht so auch, wenn der Gaming-PC schläft.
+- **Der BM25-Index** wird aus den Chunks im Store gebaut und nur neu gebaut, wenn sich deren Fingerabdrücke ändern. Für einige tausend Chunks dauert das unter einer Sekunde.
+- **Gemessen:** Treffer@1 95 % → 100 %, Treffer@5 bleibt 100 % (siehe [Eval-Ergebnisse](eval-ergebnisse.md)).

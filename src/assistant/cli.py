@@ -83,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument(
         "--modus",
         choices=SUCHMODI,
-        help="Suchmodus (Standard: SEARCH_MODE aus .env); bm25 läuft ohne Ollama",
+        help="Suchmodus (Standard: SEARCH_MODE aus .env, sonst hybrid); bm25 läuft ohne Ollama",
     )
     p_eval.add_argument("--details", action="store_true", help="Ergebnis je Frage zeigen")
     p_eval.add_argument("--ausgabe", help="Ergebnis zusätzlich als Markdown-Datei speichern")

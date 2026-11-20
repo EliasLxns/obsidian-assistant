@@ -5,8 +5,9 @@ REST-API (`/ask`, `/search`, `/status`), nie direkt mit Ollama oder dem Index.
 
 - **Fragen**: Antwort mit Quellen. Jede Quelle ist ein `[[Name]]`-Chip und öffnet die Notiz am
   passenden Abschnitt (Strg/Cmd-Klick: neuer Tab).
-- **Nur suchen**: Treffer mit Auszug, ohne Chat-Modell und deshalb schneller. Die Frage wird
-  trotzdem mit `bge-m3` eingebettet, Ollama muss also erreichbar sein.
+- **Nur suchen**: Treffer mit Auszug, ohne Chat-Modell und deshalb schneller. Mit
+  `SEARCH_MODE=hybrid` (Standard) klappt das auch, wenn der Gaming-PC schläft: Die API sucht
+  dann nur mit BM25.
 - **Ähnliche Notizen** (Befehl): sucht mit Titel und Anfang der aktiven Notiz, zeigt je Notiz
   einen Treffer und lässt die Notiz selbst weg.
 
