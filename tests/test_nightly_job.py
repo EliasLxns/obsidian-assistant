@@ -133,10 +133,45 @@ def test_rueckgaengig_laesst_eigene_aenderungen_in_ruhe(vault: Path, tmp_path: P
     lauf = _lauf(_components(vault, tmp_path / "state"), vault)
     ziel = vault / "03 Wissen/Garten/Idee Feuchtesensor.md"
     ziel.write_text(ziel.read_text(encoding="utf-8") + "\nNoch ein Gedanke.\n", encoding="utf-8")
+    md = vault / "00 Inbox/Protokoll" / f"Nachtjob {lauf.id}.md"
 
-    meldungen = protocol.rueckgaengig(vault, lauf)
+    meldungen = protocol.rueckgaengig(vault, lauf, protokoll=md)
     assert any("wurde seitdem geändert" in m for m in meldungen)
     assert ziel.exists() and not (vault / IDEE).exists()
+    # Protokoll bleibt und sagt, was übersprungen wurde
+    assert "## Rückgängig" in md.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("ende", ["\n", "\r\n"])
+def test_zeilenenden_bleiben_wie_sie_waren(vault: Path, tmp_path: Path, ende: str) -> None:
+    """Windows-Notizen behalten CRLF, Linux-Notizen LF, und Rückgängig ist byte-genau."""
+    for pfad in (IDEE, FRAGE):
+        datei = vault / pfad
+        roh = datei.read_bytes().decode("utf-8").replace("\r\n", "\n").replace("\n", ende)
+        datei.write_bytes(roh.encode("utf-8"))
+        gestern = JETZT.timestamp() - 86400
+        os.utime(datei, (gestern, gestern))
+    vorher = {p: (vault / p).read_bytes() for p in (IDEE, FRAGE)}
+    lauf = _lauf(_components(vault, tmp_path / "state"), vault)
+
+    for datei in (vault / FRAGE, vault / "03 Wissen/Garten/Idee Feuchtesensor.md"):
+        text = datei.read_bytes().decode("utf-8")
+        assert "## " in text
+        if ende == "\r\n":
+            assert "\n" not in text.replace("\r\n", "")  # kein einzelnes LF dazwischen
+        else:
+            assert "\r" not in text
+
+    md = vault / "00 Inbox/Protokoll" / f"Nachtjob {lauf.id}.md"
+    protocol.rueckgaengig(vault, lauf, protokoll=md)
+    assert {p: (vault / p).read_bytes() for p in (IDEE, FRAGE)} == vorher
+    assert not md.exists()
+
+
+def test_protokoll_ohne_git(vault: Path, tmp_path: Path) -> None:
+    lauf = _lauf(_components(vault, tmp_path / "state"), vault, git=False)
+    md = vault / "00 Inbox/Protokoll" / f"Nachtjob {lauf.id}.md"
+    assert "- Git vorher: keine Änderung\n" in md.read_text(encoding="utf-8")
 
 
 def test_probelauf_aendert_nichts(vault: Path, tmp_path: Path) -> None:
@@ -258,8 +293,11 @@ def test_cli_pause_laeufe_rueckgaengig(
     assert "1 beantwortet, 1 einsortiert" in aus
 
     assert main(["nightly", "rueckgaengig"], app) == 0
-    assert "Wiederhergestellt" in capsys.readouterr().out
+    aus = capsys.readouterr().out
+    assert "Wiederhergestellt" in aus and "Protokoll entfernt" in aus and "Git-Commit" in aus
     assert (vault / IDEE).exists()
+    assert _git_log(vault)[0].endswith("rückgängig")
+    assert not list((vault / "00 Inbox/Protokoll").glob("*.md"))
 
 
 def test_cli_ausserhalb_des_fensters(vault: Path, tmp_path: Path) -> None:

@@ -7,6 +7,8 @@ from pathlib import Path
 import httpx
 import pytest
 
+from assistant.index.store import Hit
+from assistant.ingest.chunker import Chunk
 from assistant.ingest.parser import parse_markdown, split_frontmatter
 from assistant.llm.client import OllamaLLM, unload_models
 from assistant.nightly.guard import (
@@ -19,10 +21,14 @@ from assistant.nightly.guard import (
     warum_nicht,
 )
 from assistant.nightly.inbox import (
+    SORT_SYSTEM,
+    build_sort_prompt,
     inbox_notes,
     ist_frage,
     notiz_ergaenzen,
     parse_entscheidung,
+    verwandte_notizen,
+    vorhandene_tags,
     wikilink,
     zielordner,
 )
@@ -274,3 +280,39 @@ def test_frage_erkennen() -> None:
     assert "Laufzeit" in frage
     idee = parse_markdown("# Gedanke: Sensor\n\nText", "00 Inbox/Idee.md")
     assert not ist_frage(idee)
+
+
+class _FesteTreffer:
+    """Retriever-Attrappe mit festen Scores."""
+
+    def __init__(self, scores: dict[str, float]) -> None:
+        self.scores = scores
+
+    def search_notes(self, query: str, k: int = 5) -> list[Hit]:
+        return [Hit(Chunk(f"{p}#0", p, p, "", "x"), s) for p, s in self.scores.items()][:k]
+
+
+def test_verwandte_notizen_nur_nah_am_besten() -> None:
+    """Werte wie im Probelauf mit bge-m3: fremde Notizen ~0,44, passende 0,53 bis 0,71."""
+    r = _FesteTreffer(
+        {
+            "00 Inbox/Andere.md": 0.9,
+            "Compose.md": 0.71,
+            "Docker.md": 0.64,
+            "Pi-hole.md": 0.58,
+            "Trainingsplan.md": 0.44,
+        }
+    )
+    treffer = verwandte_notizen(r, "text", "00 Inbox")  # type: ignore[arg-type]
+    assert [h.chunk.path for h in treffer] == ["Compose.md", "Docker.md"]  # Pi-hole: 0,13 hinter
+    nichts = _FesteTreffer({"Trainingsplan.md": 0.44})
+    assert verwandte_notizen(nichts, "text", "00 Inbox") == []  # type: ignore[arg-type]
+
+
+def test_vorhandene_tags_fuer_den_prompt() -> None:
+    tags = vorhandene_tags(DEMO_VAULT, "00 Inbox")
+    assert tags and all(t == t.lower() for t in tags)
+    note = parse_markdown("# Neu\n\nText", "00 Inbox/Neu.md")
+    prompt = build_sort_prompt(note, "# Neu\n\nText", {"03 Wissen/Garten": ["Tomaten"]}, [], tags)
+    assert f"Vorhandene Tags: {tags[0]}" in prompt
+    assert "ä, ö, ü" in SORT_SYSTEM

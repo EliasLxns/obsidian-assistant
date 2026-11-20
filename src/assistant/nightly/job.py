@@ -25,7 +25,7 @@ from assistant.ingest.indexer import index_vault
 from assistant.ingest.parser import Note, iter_notes, parse_markdown
 from assistant.nightly import inbox, protocol, questions
 from assistant.nightly.inbox import PROTOKOLL, PRUEFEN
-from assistant.nightly.protocol import Aktion, Lauf, schreiben, text_hash
+from assistant.nightly.protocol import Aktion, Lauf, lesen, schreiben, text_hash
 from assistant.nightly.vault_git import GitError, VaultGit
 from assistant.nightly.wol import Waker, wake_and_wait
 from assistant.retrieval.search import Retriever
@@ -35,7 +35,11 @@ from assistant.retrieval.search import Retriever
 class Optionen:
     probelauf: bool = False
     min_alter: timedelta = timedelta(minutes=30)
-    min_score: float = 0.3  # verwandte Notizen erst ab diesem Score verlinken
+    # Verwandte Notizen erst ab diesem Kosinus-Score verlinken und nur, wenn sie höchstens
+    # ``max_abstand`` hinter dem besten Treffer liegen. Mit bge-m3 erreichen selbst fremde
+    # Notizen ~0,44, passende 0,53 bis 0,71 (Probelauf 20.11.2026).
+    min_score: float = 0.5
+    max_abstand: float = 0.1
     git: bool = True
     schon_wach_ueberspringen: bool = False  # Gaming-Schutz, siehe guard.py
 
@@ -150,17 +154,20 @@ def _ablauf(
     alle = iter_notes(vault)
     ordner = inbox.zielordner(vault, s.inbox_dir, dateien=alle)
     namen = inbox.wikilink_namen(vault, dateien=alle)
+    vault_tags = inbox.vorhandene_tags(vault, s.inbox_dir, dateien=alle)
 
     # 4. Inbox. Ein Fehler bei einer Notiz stoppt nicht den ganzen Lauf.
     for datei in offen:
         rel = datei.relative_to(vault).as_posix()
         try:
-            text = datei.read_text(encoding="utf-8")
+            text = lesen(datei)
             note = parse_markdown(text, rel)
             if inbox.ist_frage(note):
                 ergebnis = _frage(note, text, rel, retriever, c, namen, jetzt, s.inbox_dir)
             else:
-                ergebnis = _sortieren(note, text, rel, vault, retriever, c, ordner, namen, optionen)
+                ergebnis = _sortieren(
+                    note, text, rel, vault, retriever, c, ordner, namen, vault_tags, optionen
+                )
             if ergebnis is None:
                 continue
             aktion, neu = ergebnis
@@ -195,7 +202,7 @@ def _ablauf(
 def _schon_erledigt(datei: Path) -> bool:
     """Beantwortete Frage-Notizen bleiben in der Inbox, brauchen aber keinen Lauf mehr."""
     try:
-        return questions.schon_beantwortet(datei.read_text(encoding="utf-8"))
+        return questions.schon_beantwortet(lesen(datei))
     except (OSError, UnicodeDecodeError):
         return False  # der Lauf meldet den Fehler dann im Protokoll
 
@@ -228,13 +235,16 @@ def _sortieren(
     c: Components,
     ordner: dict[str, list[str]],
     namen: Counter[str],
+    vault_tags: list[str],
     optionen: Optionen,
 ) -> tuple[Aktion, str]:
     s = c.settings
-    verwandt = inbox.verwandte_notizen(retriever, text, s.inbox_dir, min_score=optionen.min_score)
-    e = inbox.entscheiden(note, text, ordner, verwandt, c.llm)
+    verwandt = inbox.verwandte_notizen(
+        retriever, text, s.inbox_dir, min_score=optionen.min_score, max_abstand=optionen.max_abstand
+    )
+    e = inbox.entscheiden(note, text, ordner, verwandt, c.llm, tags=vault_tags)
     links = [inbox.wikilink(h.chunk.path, namen) for h in verwandt]
-    neu = inbox.notiz_ergaenzen(text, e.tags, links)
+    neu = protocol.wie_original(inbox.notiz_ergaenzen(text, e.tags, links), text)
 
     dateiname = Path(rel).name
     if e.sicher and e.ordner and not (vault / e.ordner / dateiname).exists():
