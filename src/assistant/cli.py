@@ -211,6 +211,12 @@ def _cmd_eval(args: argparse.Namespace, c: Components) -> int:
         f"Eval: {len(fragen)} Fragen, Suche {suche}, {modell}, "
         f"Chunks max. {args.max_zeichen} Zeichen / Überlappung {args.ueberlappung}"
     )
+    if args.schwelle is not None and modus == "hybrid":
+        print(
+            "Hinweis: In hybrid sind die Scores RRF-Werte (höchstens etwa 0,033) und hängen "
+            "nur von den Plätzen ab. Für eine Schwelle --modus vektor nutzen.",
+            file=sys.stderr,
+        )
     teile = [kopf, "", format_table(ergebnis, args.schwelle)]
     if args.details:
         teile += ["", format_details(ergebnis)]
