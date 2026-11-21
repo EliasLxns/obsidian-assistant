@@ -206,6 +206,7 @@ def create_app(
         modus=s.suchmodus,
         erreichbar=pruefe_ollama,
         link_erweiterung=s.link_erweiterung,
+        bm25_gewicht=s.bm25_gewicht,
     )
     index_sperre = threading.Lock()  # nie zwei Indexläufe gleichzeitig
     letzter: list[IndexlaufOut] = []

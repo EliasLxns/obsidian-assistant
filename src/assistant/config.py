@@ -30,6 +30,7 @@ class Settings:
     chroma_port: int = 8000
     suchmodus: str = "hybrid"  # vektor | bm25 | hybrid (für /ask, /search, ask)
     link_erweiterung: bool = True  # verlinkte Notizen mitnehmen (nur bm25/hybrid)
+    bm25_gewicht: float = 1.0  # Gewicht von BM25 in der Fusion von hybrid (0 bis 1)
     watch_polling: bool = False  # Watcher fragt ab statt inotify (Docker Desktop unter Windows)
     # Nachtjob (Phase 3)
     inbox_dir: str = "00 Inbox"
@@ -92,6 +93,7 @@ def load_settings(
         chroma_port=int(get("CHROMA_PORT", str(d.chroma_port))),
         suchmodus=modus,
         link_erweiterung=_ja(get("LINK_EXPANSION", "ja")),
+        bm25_gewicht=float(get("BM25_WEIGHT", str(d.bm25_gewicht))),
         watch_polling=_ja(get("WATCH_POLLING", "")),
         inbox_dir=get("INBOX_DIR", d.inbox_dir),
         nightly_time=get("NIGHTLY_TIME", d.nightly_time),
