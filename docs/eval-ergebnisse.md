@@ -106,3 +106,81 @@ assistant eval --modus vektor --details
 assistant eval --modus hybrid --no-links --details
 assistant eval --modus hybrid --details
 ```
+
+## Lauf 5: Schweres Eval-Set (21.11.2026)
+
+Das Standard-Set ist mit Hybrid ausgereizt. Deshalb gibt es `eval/schwer.yaml` mit 30 Fragen am selben Demo-Vault:
+
+| Typ | Fragen | Was es schwer macht |
+|---|---:|---|
+| umschreibung | 10 | Synonyme und Umgangssprache („Treter“, „Nacktschnecken“, „Staunässe“, „Nager“), oft mit einer Nachbarnotiz als Ablenker („Wie starte ich nur den Werbeblocker neu?“ gehört zu Compose, nicht zu Pi-hole) |
+| mehrere | 9 | zwei oder drei Quellen, z. B. die Ports für DNS, Sprachmodelle und Dashboard aus drei Homelab-Notizen |
+| verlinkt | 4 | die zweite Notiz teilt kaum Wörter mit der Frage, ist aber von der ersten verlinkt |
+| ohne_antwort | 7 | das Thema steht im Vault, die Einzelheit nicht („Wie hoch ist mein Ruhepuls?“, nur der Maximalpuls ist notiert) |
+
+Fragen ohne Antwort zählen nicht in Treffer@k. Der Eval zeigt für beide Gruppen den niedrigsten, mittleren und höchsten besten Score. Liegen die Gruppen getrennt, lässt sich eine Schwelle setzen, unter der der Assistent „nichts gefunden“ sagt; `--schwelle` zählt, wie viele Fragen sie richtig ablehnt und wie viele beantwortbare sie fälschlich unterdrückt.
+
+BM25 in der Cloud (ohne Ollama), Vektor und Hybrid am Gaming-PC (RTX 2070, `bge-m3`), Chunks bis 1500 Zeichen mit 200 Überlappung. Treffer zählen nur die 23 beantwortbaren Fragen.
+
+| Suche | Set | Treffer@1 | Treffer@5 | umschreibung @5 | mehrere @5 | verlinkt @5 |
+|---|---|---:|---:|---:|---:|---:|
+| hybrid + Links | Standard (23) | 100 % | 100 % | 100 % | 100 % | 100 % |
+| **vektor** | **schwer** | **65 %** | **96 %** | 90 % | 100 % | 100 % |
+| hybrid + Links (Standard) | schwer | 74 % | 87 % | 80 % | 89 % | 100 % |
+| bm25 + Links | schwer | 57 % | 78 % | 60 % | 89 % | 100 % |
+| bm25 | schwer | 57 % | 70 % | 60 % | 78 % | 75 % |
+
+Bester Score je Frage (niedrigster / Median / höchster):
+
+| Suche | mit Antwort | ohne Antwort | Schwelle | abgelehnt (ohne Antwort) | fälschlich unterdrückt |
+|---|---|---|---:|---:|---:|
+| vektor (Kosinus) | 0,455 / 0,568 / 0,739 | 0,374 / 0,492 / 0,629 | 0,5 | 4 von 7 | 3 von 23 |
+| bm25 | 3,3 / 6,6 / 20,0 | 3,0 / 4,5 / 5,7 | 5 | 5 von 7 | 9 von 23 |
+| hybrid (RRF) | 0,016 / 0,032 / 0,033 | 0,016 / 0,032 / 0,033 | – | nicht trennbar | |
+
+Laufzeit am Gaming-PC: 5,8 s für den Hybrid-Lauf inklusive Laden von bge-m3, 1,7 s für Vektor.
+
+### Einordnung
+
+- **Das Set ist deutlich schwerer** und trennt jetzt die Suchmodi: Treffer@1 fällt überall, und Hybrid verliert erstmals gegen Vektor (87 % gegen 96 % Treffer@5). Hybrid + Links erfüllt das Ziel von 80 % trotzdem, BM25 allein knapp nicht.
+- **Warum Hybrid hier schlechter ist:** RRF gibt BM25 dasselbe Gewicht wie den Vektoren. Bei Synonymen ohne gemeinsamen Wortstamm („gesichert“ ↔ „Backup“, „Treter“ ↔ „Laufschuhe“) liefert BM25 nur Rauschen, das die richtige Notiz aus den Top 5 drückt. Bei der Drei-Quellen-Frage zum Gemüsebeet fehlt so eine der drei Notizen. Vektor verpasst nur „Café-WLAN“ (Tailscale-Exit-Node). Ein nächster Versuch wäre ein Gewicht für BM25 in der Fusion, gemessen auf beiden Sets.
+- **Die Link-Erweiterung hilft BM25:** ohne sie 70 %, mit ihr 78 %. Sie holt die dritte Notiz beim Halbmarathon-Aufbau und das Rennergebnis beim Tapering. Mit bge-m3 sind alle vier `verlinkt`-Fragen schon ohne sie in den Top 5.
+- **„Nichts gefunden“ lässt sich noch nicht sauber erkennen.** Nur der Kosinus der Vektorsuche taugt als Schwelle; RRF-Werte hängen nur von den Plätzen ab (höchstens etwa 0,033) und sind bei beiden Gruppen gleich. Aber auch der Kosinus trennt nicht scharf: „Wie hoch ist mein Ruhepuls?“ (0,629, die Pulszonen-Notiz passt thematisch) und „Womit dünge ich die Tomaten?“ (0,568) liegen über vielen echten Treffern. Eine Schwelle von 0,5 lehnt 4 von 7 ab und kostet 3 echte Antworten. Für diese Fälle bleibt es Aufgabe des Chat-Modells, ehrlich „steht nicht in den Notizen“ zu sagen; das misst der Retrieval-Eval nicht.
+
+### Nachvollziehen (Lauf 5)
+
+```bash
+assistant eval --fragen eval/schwer.yaml --modus bm25 --details --schwelle 5   # ohne Ollama
+assistant eval --fragen eval/schwer.yaml --modus hybrid --details
+assistant eval --fragen eval/schwer.yaml --modus vektor --details --schwelle 0.5   # Trennschärfe
+```
+
+## Lauf 6: Gewicht für BM25 in der Fusion (21.11.2026)
+
+Idee aus Lauf 5: BM25 in der RRF-Fusion schwächer gewichten (`BM25_WEIGHT`, `assistant eval --bm25-gewicht G`), damit Synonyme mehr zählen. Gaming-PC, `bge-m3`, hybrid + Links. Bedingung: Das Standard-Set darf nicht unter 100 / 100 fallen.
+
+| BM25-Gewicht | Standard (23) T@1 / T@5 | schwer (23) T@1 / T@5 |
+|---:|---|---|
+| **1,0 (Standard)** | **100 % / 100 %** | **74 % / 87 %** |
+| 0,7 | 100 % / 100 % | 74 % / 87 % |
+| 0,5 | 100 % / 100 % | 74 % / 87 % |
+| 0,3 | 100 % / 100 % | 70 % / 87 % |
+| 0,2 | 96 % / 100 % | 74 % / 87 % |
+| 0,15 | 96 % / 100 % | 74 % / 87 % |
+| 0,1 | 96 % / 100 % | 70 % / 91 % |
+| 0,05 | 96 % / 100 % | 70 % / 96 % |
+| 0 | 96 % / 100 % | 65 % / 100 % |
+| vektor allein | 96 % / 100 % | 65 % / 96 % |
+
+### Einordnung
+
+- **Kein Gewicht erfüllt beides.** Ab 0,3 aufwärts bleibt das Standard-Set bei 100 / 100, auf dem schweren Set ändert sich aber nichts. Treffer@5 auf dem schweren Set steigt erst unter 0,15, und dann fällt „Was pflanze ich neben Tomaten, und wann dürfen sie ins Freie?“ auf Rang 2, wie bei reiner Vektorsuche.
+- **Das Gewicht bleibt deshalb bei 1,0.** Die Einstellung bleibt für weitere Versuche drin.
+- Ein festes Gewicht ist das falsche Werkzeug: Bei exakten Begriffen („ITBS“, „11434“) soll BM25 viel zählen, bei Umgangssprache („Treter“) fast nichts. Nächster Versuch wäre ein Gewicht je Frage, z. B. nach dem besten BM25-Wert oder danach, ob seltene Begriffe der Frage überhaupt im Vault vorkommen.
+
+### Nachvollziehen (Lauf 6)
+
+```bash
+assistant eval --modus hybrid --bm25-gewicht 0.5 --details
+assistant eval --fragen eval/schwer.yaml --modus hybrid --bm25-gewicht 0.5 --details
+```

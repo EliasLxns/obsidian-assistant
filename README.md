@@ -54,6 +54,7 @@ assistant index demo_vault/                  # nur Geändertes wird neu eingebet
 assistant ask "Welchen Port nutzt Ollama?"   # Antwort mit Quellen als obsidian://-Links
 assistant ask --nur-suche "Eisheiligen"      # nur Quellen, ohne Chat-Modell
 assistant eval --details                     # Treffer@1 / Treffer@5 als Tabelle
+assistant eval --fragen eval/schwer.yaml     # schweres Set, inkl. Fragen ohne Antwort
 assistant serve                              # REST-API auf http://127.0.0.1:8080, Doku unter /docs
 assistant watch                              # Vault beobachten, Änderungen nachindexieren
 ```
@@ -186,6 +187,8 @@ Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), 
 `demo_vault/` enthält 25 fiktive Notizen zu drei klar getrennten Themen (Homelab/Docker, Garten, Laufen). Echte Notizen kommen nie ins Repo.
 
 `eval/questions.yaml` enthält 23 Fragen mit der Notiz, die gefunden werden soll: exakte Begriffe, Umschreibungen, Fragen, die mehrere Notizen brauchen, und Fragen, deren zweite Notiz über einen Wikilink erreichbar ist. Ziel für Version 1: Treffer@5 ≥ 80 %, Treffer@1 ≥ 50 %, Antwortzeit < 15 s.
+
+`eval/schwer.yaml` enthält 30 schwerere Fragen: Synonyme und Umgangssprache („Treter“, „Nacktschnecken“, „Staunässe“), Fragen mit bis zu drei Quellen über Ordnergrenzen, verlinkte Notizen mit wenig gemeinsamen Wörtern und sieben Fragen, die der Vault gar nicht beantwortet (`typ: ohne_antwort`). Bei diesen misst der Eval den besten Score, damit sich eine Schwelle für „nichts gefunden“ einstellen lässt (`--modus vektor --schwelle 0.5`). Auf diesem Set erreicht die reine Vektorsuche Treffer@5 96 %, Hybrid + Links 87 % und BM25 + Links 78 % ([Lauf 5](docs/eval-ergebnisse.md)).
 
 Stand 21.11.2026 mit `bge-m3`, Hybrid-Suche (Vektor + BM25) und Link-Erweiterung: **Treffer@1 100 %, Treffer@5 100 %** auf allen 23 Fragen (reine Vektorsuche: 96 % und 100 %). BM25 allein, also ohne Ollama, erreicht mit Link-Erweiterung 65 % und 91 %. Details in [docs/eval-ergebnisse.md](docs/eval-ergebnisse.md).
 

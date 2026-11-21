@@ -29,3 +29,8 @@ def test_chroma_per_http(tmp_path: Path) -> None:
     assert leer.chroma_host == ""
     assert not leer.watch_polling
     assert load_settings(tmp_path / "fehlt", environ={"WATCH_POLLING": "true"}).watch_polling
+
+
+def test_bm25_gewicht(tmp_path: Path) -> None:
+    assert load_settings(tmp_path / "fehlt", environ={}).bm25_gewicht == 1.0
+    assert load_settings(tmp_path / "fehlt", environ={"BM25_WEIGHT": "0.5"}).bm25_gewicht == 0.5

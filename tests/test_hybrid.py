@@ -72,6 +72,34 @@ def test_rrf_belohnt_treffer_in_beiden_listen() -> None:
     assert fusion[0].score == pytest.approx(1 / 62 + 1 / 62, abs=1e-6)
 
 
+def test_rrf_mit_gewicht() -> None:
+    a, c = _chunk("a.md", "a"), _chunk("c.md", "c")
+    vektor = [Hit(a, 0.9)]
+    stichwort = [Hit(c, 12.0)]
+    # gleiche Plätze: bei Gleichstand gewinnt die erste Liste, mit Gewicht < 1 erst recht
+    assert [h.chunk.path for h in rrf(stichwort, vektor, gewichte=[1.0, 0.5])] == ["c.md", "a.md"]
+    fusion = rrf(vektor, stichwort, gewichte=[1.0, 0.5])
+    assert fusion[1].score == pytest.approx(0.5 / 61, abs=1e-6)
+    with pytest.raises(ValueError):
+        rrf(vektor, stichwort, gewichte=[1.0])
+
+
+def test_bm25_gewicht_null_folgt_der_vektorsuche(
+    embedder: FakeEmbedder, demo_store: InMemoryStore
+) -> None:
+    frage = "Wie starte ich meine Container?"
+    vektor = Retriever(embedder, demo_store, modus="vektor").search_notes(frage, 5)
+    hybrid = Retriever(embedder, demo_store, modus="hybrid", bm25_gewicht=0.0).search_notes(
+        frage, 5
+    )
+    assert [h.chunk.path for h in hybrid] == [h.chunk.path for h in vektor]
+
+
+def test_bm25_gewicht_ausserhalb_ist_fehler(embedder: FakeEmbedder) -> None:
+    with pytest.raises(ValueError):
+        Retriever(embedder, InMemoryStore(), modus="hybrid", bm25_gewicht=1.5)
+
+
 # --- Retriever --------------------------------------------------------------------------
 
 
