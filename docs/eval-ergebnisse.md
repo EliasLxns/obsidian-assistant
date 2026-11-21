@@ -154,3 +154,33 @@ assistant eval --fragen eval/schwer.yaml --modus bm25 --details --schwelle 5   #
 assistant eval --fragen eval/schwer.yaml --modus hybrid --details
 assistant eval --fragen eval/schwer.yaml --modus vektor --details --schwelle 0.5   # Trennschärfe
 ```
+
+## Lauf 6: Gewicht für BM25 in der Fusion (21.11.2026)
+
+Idee aus Lauf 5: BM25 in der RRF-Fusion schwächer gewichten (`BM25_WEIGHT`, `assistant eval --bm25-gewicht G`), damit Synonyme mehr zählen. Gaming-PC, `bge-m3`, hybrid + Links. Bedingung: Das Standard-Set darf nicht unter 100 / 100 fallen.
+
+| BM25-Gewicht | Standard (23) T@1 / T@5 | schwer (23) T@1 / T@5 |
+|---:|---|---|
+| **1,0 (Standard)** | **100 % / 100 %** | **74 % / 87 %** |
+| 0,7 | 100 % / 100 % | 74 % / 87 % |
+| 0,5 | 100 % / 100 % | 74 % / 87 % |
+| 0,3 | 100 % / 100 % | 70 % / 87 % |
+| 0,2 | 96 % / 100 % | 74 % / 87 % |
+| 0,15 | 96 % / 100 % | 74 % / 87 % |
+| 0,1 | 96 % / 100 % | 70 % / 91 % |
+| 0,05 | 96 % / 100 % | 70 % / 96 % |
+| 0 | 96 % / 100 % | 65 % / 100 % |
+| vektor allein | 96 % / 100 % | 65 % / 96 % |
+
+### Einordnung
+
+- **Kein Gewicht erfüllt beides.** Ab 0,3 aufwärts bleibt das Standard-Set bei 100 / 100, auf dem schweren Set ändert sich aber nichts. Treffer@5 auf dem schweren Set steigt erst unter 0,15, und dann fällt „Was pflanze ich neben Tomaten, und wann dürfen sie ins Freie?“ auf Rang 2, wie bei reiner Vektorsuche.
+- **Das Gewicht bleibt deshalb bei 1,0.** Die Einstellung bleibt für weitere Versuche drin.
+- Ein festes Gewicht ist das falsche Werkzeug: Bei exakten Begriffen („ITBS“, „11434“) soll BM25 viel zählen, bei Umgangssprache („Treter“) fast nichts. Nächster Versuch wäre ein Gewicht je Frage, z. B. nach dem besten BM25-Wert oder danach, ob seltene Begriffe der Frage überhaupt im Vault vorkommen.
+
+### Nachvollziehen (Lauf 6)
+
+```bash
+assistant eval --modus hybrid --bm25-gewicht 0.5 --details
+assistant eval --fragen eval/schwer.yaml --modus hybrid --bm25-gewicht 0.5 --details
+```

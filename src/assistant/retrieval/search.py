@@ -9,9 +9,9 @@ Die Modi:
 
 RRF nutzt nur die Plätze, nicht die Scores: ``score = Σ gewicht / (60 + platz)``. So müssen
 Kosinus-Werte (0 bis 1) und BM25-Werte (offen nach oben) nicht vergleichbar gemacht werden.
-Das Gewicht der Vektorliste ist 1, das von BM25 ``bm25_gewicht`` (``BM25_WEIGHT``). Unter 1
-zählt BM25 weniger: Bei Synonymen ohne gemeinsamen Wortstamm liefert BM25 sonst Rauschen,
-das richtige Vektortreffer aus den ersten Plätzen drückt (Eval-Lauf 5).
+Das Gewicht der Vektorliste ist 1, das von BM25 ``bm25_gewicht`` (``BM25_WEIGHT``, Standard 1).
+Unter 1 zählt BM25 weniger. Gemessen in Eval-Lauf 6: Kein festes Gewicht hilft bei Synonymen,
+ohne exakte Treffer auf Platz 1 zu kosten, deshalb bleibt es bei 1.
 """
 
 from __future__ import annotations
