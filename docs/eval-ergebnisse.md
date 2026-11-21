@@ -71,7 +71,7 @@ Das Eval-Set hat drei neue Fragen vom Typ `verlinkt`: Die zweite Notiz ist über
 ### Einordnung
 
 - **Die Link-Erweiterung ist ab jetzt an** (`LINK_EXPANSION=true`). Mit Hybrid ändert sie auf diesem Set nichts, es ist schon bei 100 %. Im Rückfall ohne Ollama findet sie die zweite Notiz bei „Knieprobleme und harte Einheiten“ (Läuferknie → Intervalltraining), die BM25 allein verpasst.
-- Die drei `verlinkt`-Fragen findet BM25 auch ohne Links, weil sie gemeinsame Wörter enthalten. Mit bge-m3 sind sie noch nicht gemessen; das holt der nächste Lauf auf dem Gaming-PC nach.
+- Die drei `verlinkt`-Fragen findet BM25 auch ohne Links, weil sie gemeinsame Wörter enthalten. Mit bge-m3 sind sie in Lauf 4 gemessen.
 - Der eigentliche Nutzen liegt bei echten Vaults: Dort verlinkt man Zusammenhänge, deren Notizen sich im Wortlaut wenig ähneln.
 
 ### Nachvollziehen (Lauf 3)
@@ -79,4 +79,30 @@ Das Eval-Set hat drei neue Fragen vom Typ `verlinkt`: Die zweite Notiz ist über
 ```bash
 assistant eval --modus hybrid --details   # LINK_EXPANSION=true ist Standard
 assistant eval --modus bm25 --details   # ohne Ollama; --no-links schaltet die Links ab
+```
+
+## Lauf 4: alle 23 Fragen mit bge-m3 (21.11.2026)
+
+Stand `main` nach PR #15, Gaming-PC mit RTX 2070, `bge-m3` über Ollama, Chunks bis 1500 Zeichen mit 200 Zeichen Überlappung. Damit sind jetzt auch die drei `verlinkt`-Fragen mit Vektor und Hybrid gemessen.
+
+| Suche | Fragen | Treffer@1 | Treffer@5 | mehrere (5) @1 |
+|---|---:|---:|---:|---:|
+| vektor | 23 | 96 % | 100 % | 80 % |
+| hybrid | 23 | 100 % | 100 % | 100 % |
+| **hybrid + Links** (Standard) | 23 | **100 %** | **100 %** | **100 %** |
+
+Einzige Abweichung: „Was pflanze ich neben Tomaten, und wann dürfen sie ins Freie?“ steht bei reiner Vektorsuche auf Rang 2, mit Hybrid auf Rang 1 (wie schon in Lauf 2).
+
+### Einordnung
+
+- Hybrid + Links erfüllt die Ziele für Version 1 (Treffer@5 ≥ 80 %, Treffer@1 ≥ 50 %) deutlich, auf allen vier Fragetypen.
+- Die Link-Erweiterung macht mit bge-m3 auf diesem Set keinen messbaren Unterschied, weil Hybrid schon ohne sie alle Fragen auf Rang 1 findet. Ihr Nutzen zeigt sich bisher nur im BM25-Rückfall (Lauf 3).
+- **Das Eval-Set ist damit ausgereizt.** Für weitere Vergleiche braucht es ein schwereres Set: `verlinkt`-Fragen, deren zweite Notiz im Wortlaut wenig mit der Frage gemein hat, Fachbegriffe, die nur in einer Notiz stehen, und Tippfehler.
+
+### Nachvollziehen (Lauf 4)
+
+```bash
+assistant eval --modus vektor --details
+assistant eval --modus hybrid --no-links --details
+assistant eval --modus hybrid --details
 ```
