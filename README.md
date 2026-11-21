@@ -2,7 +2,7 @@
 
 Ein lokaler RAG-Assistent für einen Obsidian-Vault. Er beantwortet Fragen an die eigenen Notizen mit Quellen-Links, sortiert nachts neue Notizen aus der Inbox ein und beantwortet „Frage:“-Notizen. Alles läuft zu Hause: keine Cloud-KI, keine Daten außer Haus.
 
-> **Status:** Phase 4 (Dashboard). CLI `index`, `ask`, `eval` aus Phase 1, REST-API, Watcher und Docker Compose aus Phase 2, der Nachtjob aus Phase 3 (Inbox sortieren, „Frage:“-Notizen beantworten, Wake-on-LAN, Gaming-Schutz, Protokoll und Rückgängig) und jetzt ein Dashboard in Streamlit: Fragen, Inbox, Vault-Statistik, Systemstatus. Erster Eval-Lauf mit Ollama: bge-m3 erreicht Treffer@1 95 % und Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
+> **Status:** Phase 5 (Plugin, Hybrid-Suche, Link-Erweiterung). CLI `index`, `ask`, `eval` aus Phase 1, REST-API, Watcher und Docker Compose aus Phase 2, der Nachtjob aus Phase 3 (Inbox sortieren, „Frage:“-Notizen beantworten, Wake-on-LAN, Gaming-Schutz, Protokoll und Rückgängig), das Streamlit-Dashboard aus Phase 4 und jetzt ein Obsidian-Plugin sowie Hybrid-Suche (Vektor + BM25) mit Link-Erweiterung. Eval mit bge-m3 auf 23 Fragen: Treffer@1 100 %, Treffer@5 100 % ([Ergebnisse](docs/eval-ergebnisse.md)).
 
 ## Funktionen (Version 1)
 
@@ -10,6 +10,14 @@ Ein lokaler RAG-Assistent für einen Obsidian-Vault. Er beantwortet Fragen an di
 - Neue Notizen in `00 Inbox` nachts verschlagworten, verlinken und einsortieren, mit Protokoll und Rückgängig-Möglichkeit
 - „Frage:“-Notizen aus der Inbox über Nacht beantworten
 - Dashboard mit Suche, Inbox-Status, Vault-Statistik und Systemstatus
+
+## Demo-Video
+
+_Folgt in Kürze._ Rund 2:30 Minuten mit dem Demo-Vault: eine Frage mit Quellen im Dashboard, das Obsidian-Plugin, ein Nachtlauf, der die Inbox sortiert, und das Dashboard. Drehbuch und Aufnahme-Checkliste: [docs/demo-video/](docs/demo-video/drehbuch.md).
+
+<!-- Nach dem Hochladen ersetzen durch:
+[![Demo-Video: Obsidian-Assistent in 2:30 Minuten](docs/bilder/demo-video.png)](<Link zum Video>)
+-->
 
 ## Architektur
 
@@ -152,7 +160,9 @@ Auf dem Mini-PC läuft der Nachtjob im Netz des Hosts, damit das Wake-on-LAN-Pak
 | `ingest/watcher.py` | `watchdog`-Meldungen sammeln und nach einer Ruhepause gebündelt nachindexieren, bei Fehlern erneut versuchen |
 | `index/embedder.py` | Interface `Embedder`, `OllamaEmbedder` (Batching, SQLite-Hash-Cache), `FakeEmbedder` |
 | `index/store.py` | Interface `VectorStore`, `ChromaStore` (Metadaten: Pfad, Überschrift, Tags, Hash, Modell), `InMemoryStore` |
-| `retrieval/search.py` | Vektorsuche, beste Notizen; Hybrid-Suche folgt hinter derselben Schnittstelle |
+| `retrieval/search.py` | Suchmodi vektor, bm25 und hybrid (RRF), beste Notizen, BM25-Rückfall ohne Ollama |
+| `retrieval/bm25.py` | Eigene BM25-Suche mit deutschen Stoppwörtern und einfachem Wortstamm |
+| `retrieval/links.py` | Link-Erweiterung: per Wikilink verlinkte Notizen hinter die besten Treffer setzen |
 | `llm/` | Interface `LLM`, `OllamaLLM`, `FakeLLM`, Prompts, Antwort mit nummerierten Quellen |
 | `evaluation.py` | Eval-Set laden, Treffer@k je Fragetyp |
 | `api/app.py` | FastAPI: `/ask`, `/search`, `/status`, `/reindex`, `/inbox`, `/vault`, `/nachtjob/pause` |
@@ -180,7 +190,7 @@ Alle Tests laufen ohne Ollama: mit `FakeEmbedder` (Bag-of-Words über Hashing), 
 
 `eval/schwer.yaml` enthält 30 schwerere Fragen: Synonyme und Umgangssprache („Treter“, „Nacktschnecken“, „Staunässe“), Fragen mit bis zu drei Quellen über Ordnergrenzen, verlinkte Notizen mit wenig gemeinsamen Wörtern und sieben Fragen, die der Vault gar nicht beantwortet (`typ: ohne_antwort`). Bei diesen misst der Eval den besten Score, damit sich eine Schwelle für „nichts gefunden“ einstellen lässt (`--modus vektor --schwelle 0.5`).
 
-Stand 21.11.2026 mit `bge-m3`, Hybrid-Suche (Vektor + BM25) und Link-Erweiterung: **Treffer@1 100 %, Treffer@5 100 %** (gemessen auf den ersten 20 Fragen). BM25 allein, also ohne Ollama, erreicht mit Link-Erweiterung 65 % und 91 %. Details in [docs/eval-ergebnisse.md](docs/eval-ergebnisse.md).
+Stand 21.11.2026 mit `bge-m3`, Hybrid-Suche (Vektor + BM25) und Link-Erweiterung: **Treffer@1 100 %, Treffer@5 100 %** auf allen 23 Fragen (reine Vektorsuche: 96 % und 100 %). BM25 allein, also ohne Ollama, erreicht mit Link-Erweiterung 65 % und 91 %. Details in [docs/eval-ergebnisse.md](docs/eval-ergebnisse.md).
 
 ## Roadmap
 
