@@ -1,0 +1,159 @@
+# Schweres Eval-Set für den Demo-Vault. Ergänzt eval/questions.yaml, das fast ausgereizt ist.
+# Aufruf: assistant eval --fragen eval/schwer.yaml --details
+# Pfade in "erwartet" sind relativ zu demo_vault/. Format wie in questions.yaml, dazu:
+#   typ: ohne_antwort = der Vault beantwortet die Frage nicht, "erwartet" fehlt.
+#        Zählt nicht in Treffer@k; der Eval zeigt stattdessen den besten Score
+#        (mit --modus vektor --schwelle 0.5: wie viele eine Schwelle ablehnen würde).
+#
+# Was die Fragen schwer macht:
+# - umschreibung: Synonyme, Umgangssprache, kaum ein Wort aus der Notiz; oft lockt eine
+#   Nachbarnotiz mit passenden Stichwörtern (Ablenker).
+# - mehrere: bis zu drei Notizen, auch über verschiedene Ordner; Treffer@5 erst, wenn alle drin sind.
+# - verlinkt: die zweite Notiz teilt kaum Wörter mit der Frage, ist aber von der ersten verlinkt.
+# - ohne_antwort: das Thema kommt im Vault vor, die gefragte Einzelheit nicht.
+
+# --- Umschreibungen: Synonyme und Ablenker ---
+- frage: "Wie oft wird mein Server gesichert, und wohin?"
+  erwartet: "03 Wissen/Docker/Volumes und Backups.md"
+  typ: umschreibung
+
+- frage: "Was tun, wenn das Bein beim Joggen seitlich am Gelenk wehtut?"
+  erwartet: "03 Wissen/Laufen/Läuferknie.md"
+  typ: umschreibung
+
+- frage: "Wie werde ich Nacktschnecken los?"
+  erwartet: "03 Wissen/Garten/Schnecken abwehren.md"
+  typ: umschreibung
+
+- frage: "Was schützt das Beet von unten gegen Nager?"
+  erwartet: "03 Wissen/Garten/Hochbeet anlegen.md"
+  typ: umschreibung
+
+- frage: "Wie komme ich unterwegs an meine Geräte daheim, ohne die Firewall aufzumachen?"
+  erwartet: "03 Wissen/Homelab/Tailscale.md"
+  typ: umschreibung
+
+- frage: "Welche Kräuter vertragen keine Staunässe?"
+  erwartet: "03 Wissen/Garten/Kräuterspirale.md"
+  typ: umschreibung
+
+- frage: "Wann brauche ich neue Treter?"
+  erwartet: "03 Wissen/Laufen/Laufschuhe.md"
+  typ: umschreibung
+
+- frage: "Wie wird im Café-WLAN trotzdem Werbung gefiltert?"
+  erwartet: "03 Wissen/Homelab/Tailscale.md"
+  typ: umschreibung
+
+- frage: "Wie starte ich nur den Werbeblocker neu?"
+  erwartet: "03 Wissen/Docker/Compose.md"
+  typ: umschreibung
+
+- frage: "Wie viel Regenwasser kann ich speichern?"
+  erwartet: "03 Wissen/Garten/Bewässerung.md"
+  typ: umschreibung
+
+# --- Mehrere Notizen, auch drei und über Ordnergrenzen ---
+- frage: "Welche Ports muss ich im Heimnetz kennen: für DNS, für die Sprachmodelle und für das Dashboard?"
+  erwartet:
+    - "03 Wissen/Homelab/Pi-hole.md"
+    - "03 Wissen/Homelab/Ollama.md"
+    - "03 Wissen/Homelab/Tailscale.md"
+  typ: mehrere
+
+- frage: "Wie ist mein Halbmarathon-Training aufgebaut: wie viele Läufe pro Woche, wie sieht die harte Einheit aus, und in welchem Puls laufe ich die lockeren?"
+  erwartet:
+    - "03 Wissen/Laufen/Trainingsplan Halbmarathon.md"
+    - "03 Wissen/Laufen/Intervalltraining.md"
+    - "03 Wissen/Laufen/Pulszonen.md"
+  typ: mehrere
+
+- frage: "Wie baue ich das Gemüsebeet auf, was wächst darin gut nebeneinander, und wie wird es gegossen?"
+  erwartet:
+    - "03 Wissen/Garten/Hochbeet anlegen.md"
+    - "03 Wissen/Garten/Mischkultur.md"
+    - "03 Wissen/Garten/Bewässerung.md"
+  typ: mehrere
+
+- frage: "Darf Kaffeesatz auf den Kompost, und hilft er gegen Schnecken?"
+  erwartet:
+    - "03 Wissen/Garten/Kompost.md"
+    - "03 Wissen/Garten/Schnecken abwehren.md"
+  typ: mehrere
+
+- frage: "Welche Gemüse dürfen erst nach den Eisheiligen raus, und welche davon sind Starkzehrer?"
+  erwartet:
+    - "03 Wissen/Garten/Aussaatkalender.md"
+    - "03 Wissen/Garten/Mischkultur.md"
+  typ: mehrere
+
+- frage: "Was schützt meine Tomaten vor Braunfäule, und neben welche Pflanze dürfen sie deshalb nicht?"
+  erwartet:
+    - "03 Wissen/Garten/Tomaten.md"
+    - "03 Wissen/Garten/Mischkultur.md"
+  typ: mehrere
+
+- frage: "Wie lange dauert es vom Magic Packet bis zur ersten Antwort des Sprachmodells, und wann schläft der Rechner wieder ein?"
+  erwartet:
+    - "03 Wissen/Homelab/Wake-on-LAN.md"
+    - "03 Wissen/Homelab/Ollama.md"
+  typ: mehrere
+
+- frage: "War mein Tempo beim Stadtlauf schneller als die geplante Zielpace?"
+  erwartet:
+    - "03 Wissen/Laufen/Stadtlauf 2026.md"
+    - "03 Wissen/Laufen/Trainingsplan Halbmarathon.md"
+  typ: mehrere
+
+- frage: "Welche Adresse hat der Server im Heimnetz, und unter welchem Namen erreiche ich ihn von unterwegs?"
+  erwartet:
+    - "03 Wissen/Homelab/Netzwerkplan.md"
+    - "03 Wissen/Homelab/Tailscale.md"
+  typ: mehrere
+
+# --- Verlinkt: die zweite Notiz teilt kaum Wörter mit der Frage ---
+- frage: "Wie bekomme ich den Rechner mit den Sprachmodellen wach, und warum klappt das manchmal nicht?"
+  erwartet:
+    - "03 Wissen/Homelab/Ollama.md"
+    - "03 Wissen/Homelab/Wake-on-LAN.md"
+  typ: verlinkt
+
+- frage: "Woran lag mein Läuferknie, und worauf achte ich beim Schuhkauf?"
+  erwartet:
+    - "03 Wissen/Laufen/Läuferknie.md"
+    - "03 Wissen/Laufen/Laufschuhe.md"
+  typ: verlinkt
+
+- frage: "Was mache ich in den letzten Tagen vor dem Halbmarathon, und hat das beim Rennen geklappt?"
+  erwartet:
+    - "03 Wissen/Laufen/Trainingsplan Halbmarathon.md"
+    - "03 Wissen/Laufen/Stadtlauf 2026.md"
+  typ: verlinkt
+
+- frage: "Welche Gartenabfälle darf ich kompostieren, und in welche Lage des Hochbeets kommt der halbfertige?"
+  erwartet:
+    - "03 Wissen/Garten/Kompost.md"
+    - "03 Wissen/Garten/Hochbeet anlegen.md"
+  typ: verlinkt
+
+# --- Ohne Antwort: Thema im Vault, Einzelheit nicht ---
+- frage: "Wie hoch ist mein Ruhepuls?"
+  typ: ohne_antwort
+
+- frage: "Welche Kartoffelsorten baue ich an?"
+  typ: ohne_antwort
+
+- frage: "Auf welchem Port läuft Grafana?"
+  typ: ohne_antwort
+
+- frage: "Wie viel hat meine Grafikkarte gekostet?"
+  typ: ohne_antwort
+
+- frage: "Womit dünge ich die Tomaten?"
+  typ: ohne_antwort
+
+- frage: "Wie lautet die IPv6-Adresse des Servers?"
+  typ: ohne_antwort
+
+- frage: "Welchen Rasenmäher habe ich?"
+  typ: ohne_antwort

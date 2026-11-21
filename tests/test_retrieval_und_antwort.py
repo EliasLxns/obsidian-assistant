@@ -2,8 +2,10 @@ from pathlib import Path
 
 from assistant.evaluation import (
     EvalQuestion,
+    EvalResult,
     QuestionResult,
     evaluate,
+    format_details,
     format_table,
     load_questions,
 )
@@ -15,7 +17,7 @@ from assistant.llm.answer import KEINE_TREFFER, answer_question, nur_zitierte
 from assistant.llm.client import FakeLLM
 from assistant.llm.prompts import SYSTEM_PROMPT
 from assistant.retrieval.search import Retriever
-from tests.conftest import QUESTIONS
+from tests.conftest import QUESTIONS, ROOT
 
 
 def test_suche_findet_exakten_begriff(embedder: FakeEmbedder, demo_store: InMemoryStore) -> None:
@@ -108,3 +110,72 @@ def test_ohne_zitate_bleiben_alle_quellen() -> None:
 
 def test_prompt_verlangt_du_und_nichts_erfinden() -> None:
     assert "„du“" in SYSTEM_PROMPT and "Erfinde keine" in SYSTEM_PROMPT
+
+
+def test_eval_set_ohne_antwort_laden(tmp_path: Path) -> None:
+    datei = tmp_path / "q.yaml"
+    datei.write_text(
+        '- frage: "a"\n  typ: ohne_antwort\n- frage: "b"\n  erwartet: []\n  typ: ohne_antwort\n',
+        encoding="utf-8",
+    )
+    fragen = load_questions(datei)
+    assert [f.erwartet for f in fragen] == [(), ()]
+    assert not any(f.beantwortbar for f in fragen)
+
+
+def test_eval_set_ohne_antwort_mit_erwartet_ist_fehler(tmp_path: Path) -> None:
+    datei = tmp_path / "q.yaml"
+    for inhalt in (
+        '- frage: "a"\n  erwartet: "x.md"\n  typ: ohne_antwort\n',
+        '- frage: "a"\n  typ: exakt\n',
+    ):
+        datei.write_text(inhalt, encoding="utf-8")
+        try:
+            load_questions(datei)
+        except ValueError as e:
+            assert "erwartet" in str(e)
+        else:
+            raise AssertionError("ValueError erwartet")
+
+
+def _gemischt() -> EvalResult:
+    mit = EvalQuestion("mit", ("a.md",), "exakt")
+    ohne = EvalQuestion("ohne", (), "ohne_antwort")
+    return EvalResult(
+        [
+            QuestionResult(mit, ("a.md", "b.md"), (0.7, 0.4)),
+            QuestionResult(ohne, ("b.md",), (0.45,)),
+            QuestionResult(ohne, (), ()),
+        ],
+        k=5,
+    )
+
+
+def test_ohne_antwort_zaehlt_nicht_in_treffer() -> None:
+    ergebnis = _gemischt()
+    assert ergebnis.rate(5) == 1.0  # nur die eine beantwortbare Frage
+    assert ergebnis.unter_schwelle(0.5, beantwortbar=False) == (2, 2)  # ohne Treffer zählt mit
+    assert ergebnis.unter_schwelle(0.5, beantwortbar=True) == (0, 1)
+    assert ergebnis.unter_schwelle(0.8, beantwortbar=True) == (1, 1)
+
+
+def test_tabelle_mit_ohne_antwort_und_schwelle() -> None:
+    tabelle = format_table(_gemischt(), schwelle=0.5)
+    assert "| ohne_antwort | 2 | – | – |" in tabelle
+    assert "| **gesamt** | 1 |" in tabelle
+    assert "| mit Antwort | 1 | 0.700 | 0.700 | 0.700 |" in tabelle
+    assert "| ohne Antwort | 2 | 0.450 | 0.450 | 0.450 |" in tabelle
+    assert "2 von 2 Fragen ohne Antwort abgelehnt, 0 von 1" in tabelle
+    assert "| ohne | ohne_antwort | – | – | – |" in format_details(_gemischt())
+
+
+def test_tabelle_ohne_fragen_ohne_antwort_bleibt_kurz() -> None:
+    q = EvalQuestion("f", ("a.md",), "exakt")
+    assert "Bester Score" not in format_table(EvalResult([QuestionResult(q, ("a.md",))], k=5))
+
+
+def test_schweres_set_mit_fake_embedder(embedder: FakeEmbedder, demo_store: InMemoryStore) -> None:
+    fragen = load_questions(ROOT / "eval" / "schwer.yaml")
+    ergebnis = evaluate(Retriever(embedder, demo_store), fragen, k=5)
+    assert len(ergebnis.beantwortbar) == 23 and len(ergebnis.ohne_antwort) == 7
+    assert all(r.scores for r in ergebnis.beantwortbar)

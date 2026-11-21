@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument(
         "--fragen",
         default="eval/questions.yaml",
-        help="Pfad zum Eval-Set (Standard: eval/questions.yaml)",
+        help="Pfad zum Eval-Set (Standard: eval/questions.yaml, schwerer: eval/schwer.yaml)",
     )
     p_eval.add_argument("--vault", default="demo_vault", help="Vault zum Eval-Set")
     p_eval.add_argument("-k", type=int, default=5, help="Treffer@k (Standard: 5)")
@@ -91,6 +91,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--links",
         action=argparse.BooleanOptionalAction,
         help="Link-Erweiterung an/aus (Standard: LINK_EXPANSION aus .env; nur bm25 und hybrid)",
+    )
+    p_eval.add_argument(
+        "--schwelle",
+        type=float,
+        help="Bei Fragen ohne Antwort: zählen, wie viele ein Mindest-Score ablehnen würde "
+        "(sinnvoll mit --modus vektor)",
     )
     p_eval.add_argument("--details", action="store_true", help="Ergebnis je Frage zeigen")
     p_eval.add_argument("--ausgabe", help="Ergebnis zusätzlich als Markdown-Datei speichern")
@@ -205,7 +211,7 @@ def _cmd_eval(args: argparse.Namespace, c: Components) -> int:
         f"Eval: {len(fragen)} Fragen, Suche {suche}, {modell}, "
         f"Chunks max. {args.max_zeichen} Zeichen / Überlappung {args.ueberlappung}"
     )
-    teile = [kopf, "", format_table(ergebnis)]
+    teile = [kopf, "", format_table(ergebnis, args.schwelle)]
     if args.details:
         teile += ["", format_details(ergebnis)]
     text = "\n".join(teile)

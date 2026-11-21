@@ -80,3 +80,40 @@ Das Eval-Set hat drei neue Fragen vom Typ `verlinkt`: Die zweite Notiz ist über
 assistant eval --modus hybrid --details   # LINK_EXPANSION=true ist Standard
 assistant eval --modus bm25 --details   # ohne Ollama; --no-links schaltet die Links ab
 ```
+
+## Lauf 4: Schweres Eval-Set, erst nur BM25 (21.11.2026)
+
+Das Standard-Set ist mit Hybrid ausgereizt. Deshalb gibt es `eval/schwer.yaml` mit 30 Fragen am selben Demo-Vault:
+
+| Typ | Fragen | Was es schwer macht |
+|---|---:|---|
+| umschreibung | 10 | Synonyme und Umgangssprache („Treter“, „Nacktschnecken“, „Staunässe“, „Nager“), oft mit einer Nachbarnotiz als Ablenker („Wie starte ich nur den Werbeblocker neu?“ gehört zu Compose, nicht zu Pi-hole) |
+| mehrere | 9 | zwei oder drei Quellen, z. B. die Ports für DNS, Sprachmodelle und Dashboard aus drei Homelab-Notizen |
+| verlinkt | 4 | die zweite Notiz teilt kaum Wörter mit der Frage, ist aber von der ersten verlinkt |
+| ohne_antwort | 7 | das Thema steht im Vault, die Einzelheit nicht („Wie hoch ist mein Ruhepuls?“, nur der Maximalpuls ist notiert) |
+
+Fragen ohne Antwort zählen nicht in Treffer@k. Der Eval zeigt für beide Gruppen den niedrigsten, mittleren und höchsten besten Score. Liegen die Gruppen getrennt, lässt sich eine Schwelle setzen, unter der der Assistent „nichts gefunden“ sagt; `--schwelle` zählt, wie viele Fragen sie richtig ablehnt und wie viele beantwortbare sie fälschlich unterdrückt.
+
+Gemessen in der Cloud, nur BM25 (ohne Ollama). Vektor und Hybrid mit bge-m3 holt der nächste Lauf am Gaming-PC nach.
+
+| Suche | Set | Treffer@1 | Treffer@5 | umschreibung @5 | mehrere @5 | verlinkt @5 |
+|---|---|---:|---:|---:|---:|---:|
+| bm25 + Links | Standard (23) | 65 % | 91 % | 75 % | 100 % | 100 % |
+| bm25 + Links | **schwer (23 + 7)** | **57 %** | **78 %** | 60 % | 89 % | 100 % |
+| bm25 | schwer (23 + 7) | 57 % | 70 % | 60 % | 78 % | 75 % |
+
+Bester BM25-Score: mit Antwort 3,3 bis 20,0 (Median 6,6), ohne Antwort 3,0 bis 5,7 (Median 4,5). Eine Schwelle von 5 lehnt 5 von 7 Fragen ohne Antwort ab, unterdrückt aber 9 von 23 beantwortbaren.
+
+### Einordnung
+
+- **Das Set ist schwerer:** BM25 fällt bei Treffer@5 von 91 % auf 78 % und liegt damit knapp unter dem Ziel von 80 %. Ganz verfehlt werden vor allem Synonyme ohne gemeinsamen Wortstamm („Nacktschnecken“ ↔ „Schnecken“, „Treter“, „gesichert“ ↔ „Backup“, „Regenwasser“ ↔ „Regentonne“). Genau dafür sind die Vektoren da; der Lauf am PC zeigt, ob Hybrid hier noch Luft hat.
+- **Die Link-Erweiterung zahlt sich hier aus:** ohne sie 70 %, mit ihr 78 %. Sie holt die dritte Notiz beim Halbmarathon-Aufbau und das Rennergebnis beim Tapering.
+- **BM25-Scores taugen nicht als Schwelle:** Die Gruppen überlappen stark, weil BM25-Werte von der Länge der Frage abhängen. Für „nichts gefunden“ kommt nur der Kosinus der Vektorsuche infrage (`--modus vektor --schwelle …`). Der Nachtjob nutzt dort schon 0,5.
+
+### Nachvollziehen (Lauf 4)
+
+```bash
+assistant eval --fragen eval/schwer.yaml --modus bm25 --details --schwelle 5   # ohne Ollama
+assistant eval --fragen eval/schwer.yaml --modus hybrid --details              # am Gaming-PC
+assistant eval --fragen eval/schwer.yaml --modus vektor --schwelle 0.5         # Trennschärfe
+```
