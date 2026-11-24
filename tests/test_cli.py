@@ -82,6 +82,14 @@ def test_eval_zeigt_tabelle_und_speichert(
     assert ziel.read_text(encoding="utf-8").strip() == out.strip()
 
 
+def test_eval_warnt_bei_schwelle_mit_hybrid(capsys: pytest.CaptureFixture[str]) -> None:
+    argv = ["eval", "--vault", str(DEMO_VAULT), "--fragen", str(QUESTIONS), "--schwelle", "0.5"]
+    assert main([*argv, "--modus", "hybrid"], FakeApp()) == 0
+    assert "RRF-Werte" in capsys.readouterr().err
+    assert main([*argv, "--modus", "vektor"], FakeApp()) == 0
+    assert "RRF-Werte" not in capsys.readouterr().err
+
+
 def test_ollama_nicht_erreichbar(capsys: pytest.CaptureFixture[str]) -> None:
     def kaputt(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("Connection refused", request=request)

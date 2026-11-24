@@ -7,8 +7,11 @@ Die Modi:
 - ``hybrid``: beide Ranglisten per Reciprocal Rank Fusion (RRF) zusammengeführt. Ist Ollama
   nicht erreichbar, sucht ``hybrid`` nur mit BM25 weiter, statt zu scheitern.
 
-RRF nutzt nur die Plätze, nicht die Scores: ``score = Σ 1 / (60 + platz)``. So müssen
+RRF nutzt nur die Plätze, nicht die Scores: ``score = Σ gewicht / (60 + platz)``. So müssen
 Kosinus-Werte (0 bis 1) und BM25-Werte (offen nach oben) nicht vergleichbar gemacht werden.
+Das Gewicht der Vektorliste ist 1, das von BM25 ``bm25_gewicht`` (``BM25_WEIGHT``, Standard 1).
+Unter 1 zählt BM25 weniger. Gemessen in Eval-Lauf 6: Kein festes Gewicht hilft bei Synonymen,
+ohne exakte Treffer auf Platz 1 zu kosten, deshalb bleibt es bei 1.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Literal
 
 from assistant.index.embedder import Embedder, OllamaError
@@ -51,13 +54,22 @@ def best_per_note(hits: list[Hit]) -> list[Hit]:
     return ergebnis
 
 
-def rrf(*ranglisten: list[Hit], k: int = RRF_K) -> list[Hit]:
-    """Führt Ranglisten zusammen. ``score`` ist danach der RRF-Wert, höher ist besser."""
+def rrf(
+    *ranglisten: list[Hit], k: int = RRF_K, gewichte: Sequence[float] | None = None
+) -> list[Hit]:
+    """Führt Ranglisten zusammen. ``score`` ist danach der RRF-Wert, höher ist besser.
+
+    ``gewichte`` (eins je Liste, Standard: alle 1) skaliert den Beitrag einer Liste.
+    """
+    if gewichte is None:
+        gewichte = [1.0] * len(ranglisten)
+    if len(gewichte) != len(ranglisten):
+        raise ValueError("rrf: je Rangliste genau ein Gewicht")
     punkte: dict[str, float] = {}
     chunks: dict[str, Hit] = {}
-    for liste in ranglisten:
+    for liste, gewicht in zip(ranglisten, gewichte, strict=True):
         for platz, hit in enumerate(liste, start=1):
-            punkte[hit.chunk.id] = punkte.get(hit.chunk.id, 0.0) + 1 / (k + platz)
+            punkte[hit.chunk.id] = punkte.get(hit.chunk.id, 0.0) + gewicht / (k + platz)
             chunks.setdefault(hit.chunk.id, hit)
     reihenfolge = sorted(punkte, key=lambda i: punkte[i], reverse=True)
     return [Hit(chunks[i].chunk, round(punkte[i], 6)) for i in reihenfolge]
@@ -77,6 +89,7 @@ class Retriever:
     ``link_erweiterung`` nimmt in ``bm25`` und ``hybrid`` die Notizen dazu, auf die die besten
     Treffer verlinken (siehe ``links.py``). In ``vektor`` bleibt sie aus, damit ``score`` der
     Kosinus bleibt.
+    ``bm25_gewicht`` (0 bis 1) ist das Gewicht der BM25-Liste in der Fusion von ``hybrid``.
     """
 
     def __init__(
@@ -89,6 +102,7 @@ class Retriever:
         erreichbar: Callable[[], bool] | None = None,
         rueckfall: bool = True,
         link_erweiterung: bool = False,
+        bm25_gewicht: float = 1.0,
         pruef_intervall_s: float = 30.0,
         bm25_max_alter_s: float = 60.0,
         uhr: Callable[[], float] = time.monotonic,
@@ -99,6 +113,9 @@ class Retriever:
         self.modus = suchmodus(modus)
         self.rueckfall = rueckfall
         self.link_erweiterung = link_erweiterung
+        if not 0.0 <= bm25_gewicht <= 1.0:
+            raise ValueError(f"bm25_gewicht muss zwischen 0 und 1 liegen, nicht {bm25_gewicht}")
+        self.bm25_gewicht = bm25_gewicht
         self._erreichbar = erreichbar
         self._pruef_intervall_s = pruef_intervall_s
         self._bm25_max_alter_s = bm25_max_alter_s
@@ -159,9 +176,11 @@ class Retriever:
                         self._ping = (self._uhr(), False)
         listen = [stichwort] if vektor is None else [vektor, stichwort]
         modus: Suchmodus = "bm25" if vektor is None else "hybrid"
+        gewichte = [1.0, self.bm25_gewicht][: len(listen)]
+        fusion = stichwort if vektor is None else rrf(*listen, gewichte=gewichte)
         if not self.link_erweiterung:
-            return (stichwort if vektor is None else rrf(*listen)[:n]), modus
-        basis = stichwort if vektor is None else rrf(*listen)
+            return fusion[:n], modus
+        basis = fusion
         return links.einfuegen(basis, graph.verlinkt(basis, stichwort))[:n], modus
 
     def search(self, query: str, k: int = 5) -> list[Hit]:

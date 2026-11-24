@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument(
         "--fragen",
         default="eval/questions.yaml",
-        help="Pfad zum Eval-Set (Standard: eval/questions.yaml)",
+        help="Pfad zum Eval-Set (Standard: eval/questions.yaml, schwerer: eval/schwer.yaml)",
     )
     p_eval.add_argument("--vault", default="demo_vault", help="Vault zum Eval-Set")
     p_eval.add_argument("-k", type=int, default=5, help="Treffer@k (Standard: 5)")
@@ -91,6 +91,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--links",
         action=argparse.BooleanOptionalAction,
         help="Link-Erweiterung an/aus (Standard: LINK_EXPANSION aus .env; nur bm25 und hybrid)",
+    )
+    p_eval.add_argument(
+        "--bm25-gewicht",
+        type=float,
+        help="Gewicht von BM25 in der Fusion von hybrid, 0 bis 1 (Standard: BM25_WEIGHT)",
+    )
+    p_eval.add_argument(
+        "--schwelle",
+        type=float,
+        help="Bei Fragen ohne Antwort: zählen, wie viele ein Mindest-Score ablehnen würde "
+        "(sinnvoll mit --modus vektor)",
     )
     p_eval.add_argument("--details", action="store_true", help="Ergebnis je Frage zeigen")
     p_eval.add_argument("--ausgabe", help="Ergebnis zusätzlich als Markdown-Datei speichern")
@@ -160,6 +171,7 @@ def _cmd_ask(args: argparse.Namespace, c: Components) -> int:
         modus=s.suchmodus,
         erreichbar=lambda: ollama_reachable(s.ollama_url),
         link_erweiterung=s.link_erweiterung,
+        bm25_gewicht=s.bm25_gewicht,
     )
     vault_name = s.vault_name
     if args.nur_suche:
@@ -196,16 +208,32 @@ def _cmd_eval(args: argparse.Namespace, c: Components) -> int:
     fragen = load_questions(Path(args.fragen))
     # Ohne Rückfall: Ist Ollama weg, scheitert der Eval, statt still nur BM25 zu messen.
     mit_links = c.settings.link_erweiterung if args.links is None else args.links
-    retriever = Retriever(embedder, store, modus=modus, rueckfall=False, link_erweiterung=mit_links)
+    gewicht = c.settings.bm25_gewicht if args.bm25_gewicht is None else args.bm25_gewicht
+    retriever = Retriever(
+        embedder,
+        store,
+        modus=modus,
+        rueckfall=False,
+        link_erweiterung=mit_links,
+        bm25_gewicht=gewicht,
+    )
     ergebnis = evaluate(retriever, fragen, args.k)
 
     modell = "ohne Embeddings" if modus == "bm25" else f"Modell {embedder.model_name}"
     suche = f"{modus} + Links" if mit_links and modus != "vektor" else modus
+    if modus == "hybrid":
+        suche += f" (BM25-Gewicht {gewicht:g})"
     kopf = (
         f"Eval: {len(fragen)} Fragen, Suche {suche}, {modell}, "
         f"Chunks max. {args.max_zeichen} Zeichen / Überlappung {args.ueberlappung}"
     )
-    teile = [kopf, "", format_table(ergebnis)]
+    if args.schwelle is not None and modus == "hybrid":
+        print(
+            "Hinweis: In hybrid sind die Scores RRF-Werte (höchstens etwa 0,033) und hängen "
+            "nur von den Plätzen ab. Für eine Schwelle --modus vektor nutzen.",
+            file=sys.stderr,
+        )
+    teile = [kopf, "", format_table(ergebnis, args.schwelle)]
     if args.details:
         teile += ["", format_details(ergebnis)]
     text = "\n".join(teile)

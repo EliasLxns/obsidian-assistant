@@ -117,4 +117,6 @@ Fehlt `ruff`, `pyright` oder `pytest`, überspringen die Hooks still. Deshalb zu
   typ: umschreibung        # exakt | umschreibung | mehrere | verlinkt
 ```
 
+Schwereres Set: `eval/schwer.yaml` (`assistant eval --fragen eval/schwer.yaml`), zusätzlich mit `typ: ohne_antwort` (kein `erwartet`, zählt nicht in Treffer@k, der Eval zeigt stattdessen den besten Score; `--schwelle` zählt, was eine Mindest-Schwelle ablehnen würde).
+
 Bei `typ: mehrere` und `verlinkt` ist `erwartet` eine Liste (bei `verlinkt` verlinkt die erste Notiz auf die zweite). Wird der Demo-Vault geändert, prüft `tests/test_demo_vault.py`, dass alle erwarteten Notizen und Wikilinks noch existieren.
